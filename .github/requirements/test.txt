@@ -1,0 +1,31 @@
+# Test dependencies for openframe-adapters local development
+#
+# CI does NOT use this file.
+# Each adapter installs its own dev extras directly:
+#   cd packages/openframe-adapters-db-postgres && pip install -e ".[dev]"
+#   cd packages/openframe-adapters-db-mongo    && pip install -e ".[dev]"
+#
+# This file is a convenience shortcut for running all adapter tests locally
+# from the repo root without entering each package directory:
+#   pip install -r .github/requirements/test.txt
+#   pytest packages/
+
+# ── Test runner ───────────────────────────────────────────────────────────
+pytest>=8.0
+pytest-asyncio>=0.23
+pytest-mock>=3.14
+
+# ── Adapter runtime deps ──────────────────────────────────────────────────
+# Pinned at minimum supported floors — mirrors each adapter's pyproject.toml.
+
+# openframe-adapters-db-postgres
+asyncpg>=0.29
+
+# openframe-adapters-db-mongo
+motor>=3.3
+pymongo>=4.6
+
+# ── Shared transitive dep ─────────────────────────────────────────────────
+# openframe-core is a direct dependency of every adapter package.
+# Pinned here to lock the local environment against the minimum supported version.
+openframe-core>=1.0,<2

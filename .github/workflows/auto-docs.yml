@@ -1,0 +1,74 @@
+name: Auto Docs
+
+# Deploy docs to GitHub Pages on every push to production.
+# On PRs to dev or production, only build (validate) — do not deploy.
+on:
+  push:
+    branches:
+      - production
+
+  pull_request:
+    branches:
+      - dev
+      - production
+
+jobs:
+  # ── 1. Build docs (runs on every PR to validate the docs compile) ────────
+  build-docs:
+    name: Build Documentation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install docs dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r .github/requirements/docs.txt
+
+      - name: Build docs (validate only)
+        run: mkdocs build --strict
+
+  # ── 2. Deploy docs to GitHub Pages (production merges only) ─────────────
+  deploy-docs:
+    name: Deploy Documentation
+    needs: build-docs
+    runs-on: ubuntu-latest
+
+    # Only deploy when a commit lands on production, not on PRs.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/production'
+
+    permissions:
+      contents: write   # required for gh-deploy to push to gh-pages branch
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history needed for mkdocs git-revision-date plugins
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install docs dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r .github/requirements/docs.txt
+
+      - name: Configure Git for gh-deploy
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Deploy docs to GitHub Pages
+        run: mkdocs gh-deploy --force
