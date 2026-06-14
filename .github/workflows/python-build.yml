@@ -40,7 +40,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          # Full history so git diff can resolve any before/after SHA pair,
+          # regardless of how many commits are included in the push.
+          fetch-depth: 0
 
       - name: Detect changed packages
         id: detect
@@ -55,7 +57,20 @@ jobs:
             fi
             PACKAGES=$(jq -nc --arg p "$INPUT" '[$p]')
           else
-            CHANGED=$(git diff --name-only HEAD~1 HEAD \
+            BEFORE="${{ github.event.before }}"
+            SHA="${{ github.sha }}"
+
+            # On the very first push to a new branch, before is all zeros.
+            # Fall back to diffing only the tip commit in that case.
+            if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+              DIFF_BASE="HEAD~1"
+            else
+              DIFF_BASE="$BEFORE"
+            fi
+
+            echo "Diffing $DIFF_BASE..$SHA"
+
+            CHANGED=$(git diff --name-only "$DIFF_BASE" "$SHA" \
               | grep -E '^(packages|meta)/' \
               | awk -F/ '{print $1"/"$2}' \
               | sort -u \
