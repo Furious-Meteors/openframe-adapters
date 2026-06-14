@@ -58,7 +58,8 @@ jobs:
             CHANGED=$(git diff --name-only HEAD~1 HEAD \
               | grep -E '^(packages|meta)/' \
               | awk -F/ '{print $1"/"$2}' \
-              | sort -u)
+              | sort -u \
+              || true)
 
             echo "Changed directories:"
             echo "$CHANGED"
