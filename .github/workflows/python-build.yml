@@ -21,16 +21,20 @@ on:
         type: string
 
 jobs:
-  # ── 1. Detect which packages changed ─────────────────────────────────────
+  # ── 1. Enumerate all packages in the repo ────────────────────────────────
   #
-  # Watches two directory roots:
+  # Scans two directory roots for pyproject.toml files:
   #   packages/  — individual adapter packages (openframe-adapters-db-postgres etc.)
-  #   meta/      — meta-packages (openframe-adapters, openframe-suite)
+  #   meta/      — meta-packages (openframe-adapters etc.)
   #
-  # Output: JSON array of directory paths that contain a changed pyproject.toml
-  # Example: ["packages/openframe-adapters-db-postgres", "meta/openframe-adapters"]
+  # All packages are always processed on every push. The publish step uses
+  # skip_existing: true, so already-published versions are silently skipped.
+  # Use workflow_dispatch to target a single package manually.
+  #
+  # Output: JSON array of directory paths, e.g.:
+  #   ["meta/openframe-adapters", "packages/openframe-adapters-db-mongo", ...]
   detect:
-    name: Detect Changed Packages
+    name: Detect Packages
     runs-on: ubuntu-latest
     outputs:
       packages: ${{ steps.detect.outputs.packages }}
@@ -39,12 +43,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          # Full history so git diff can resolve any before/after SHA pair,
-          # regardless of how many commits are included in the push.
-          fetch-depth: 0
 
-      - name: Detect changed packages
+      - name: Detect packages
         id: detect
         shell: bash
         run: |
@@ -57,37 +57,13 @@ jobs:
             fi
             PACKAGES=$(jq -nc --arg p "$INPUT" '[$p]')
           else
-            BEFORE="${{ github.event.before }}"
-            SHA="${{ github.sha }}"
-
-            # On the very first push to a new branch, before is all zeros.
-            # Fall back to diffing only the tip commit in that case.
-            if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
-              DIFF_BASE="HEAD~1"
-            else
-              DIFF_BASE="$BEFORE"
-            fi
-
-            echo "Diffing $DIFF_BASE..$SHA"
-
-            CHANGED=$(git diff --name-only "$DIFF_BASE" "$SHA" \
-              | grep -E '^(packages|meta)/' \
-              | awk -F/ '{print $1"/"$2}' \
-              | sort -u \
-              || true)
-
-            echo "Changed directories:"
-            echo "$CHANGED"
-
-            VALID_JSON='[]'
-            while IFS= read -r dir; do
-              [ -z "$dir" ] && continue
-              if [ -f "${dir}/pyproject.toml" ]; then
-                VALID_JSON=$(echo "$VALID_JSON" | jq --arg d "$dir" '. + [$d]')
-              fi
-            done <<< "$CHANGED"
-
-            PACKAGES="$VALID_JSON"
+            # Enumerate every package that exists in the repo.
+            # publish uses skip_existing: true, so already-published versions
+            # are silently skipped — safe to attempt all packages on every push.
+            PACKAGES=$(find packages meta -maxdepth 2 -name pyproject.toml 2>/dev/null \
+              | sed 's|/pyproject.toml||' \
+              | sort \
+              | jq -R . | jq -s .)
           fi
 
           echo "Packages to process: $PACKAGES"
