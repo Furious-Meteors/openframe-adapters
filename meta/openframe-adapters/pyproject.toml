@@ -1,0 +1,123 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "openframe-adapters"
+version = "1.0.0"
+description = "OpenFrame Microservice Suite — adapter meta-package. Install adapters by name or group."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+keywords = [
+    "openframe",
+    "hexagonal",
+    "microservice",
+    "postgres",
+    "mongodb",
+    "redis",
+    "kafka",
+    "vector-database",
+]
+
+# The meta-package has no runtime dependencies of its own.
+# openframe-core is a transitive dependency — every individual
+# adapter package already pins it. Installing any extra pulls
+# openframe-core in automatically.
+dependencies = []
+
+[project.optional-dependencies]
+
+# ── Individual adapters ────────────────────────────────────────────────────
+
+# Relational
+postgres   = ["openframe-adapters-db-postgres>=1.0,<2"]
+mysql      = ["openframe-adapters-db-mysql>=1.0,<2"]
+
+# Key-value
+redis      = ["openframe-adapters-db-redis>=1.0,<2"]
+dynamodb   = ["openframe-adapters-db-dynamodb>=1.0,<2"]
+
+# Document
+mongo      = ["openframe-adapters-db-mongo>=1.0,<2"]
+
+# Columnar
+cassandra  = ["openframe-adapters-db-cassandra>=1.0,<2"]
+
+# Time-series
+influxdb   = ["openframe-adapters-db-influxdb>=1.0,<2"]
+
+# Vector
+milvus     = ["openframe-adapters-db-milvus>=1.0,<2"]
+chromadb   = ["openframe-adapters-db-chromadb>=1.0,<2"]
+qdrant     = ["openframe-adapters-db-qdrant>=1.0,<2"]
+faiss      = ["openframe-adapters-db-faiss>=1.0,<2"]
+falkordb   = ["openframe-adapters-db-falkordb>=1.0,<2"]
+
+# Queues
+kafka      = ["openframe-adapters-queue-kafka>=1.0,<2"]
+nats       = ["openframe-adapters-queue-nats>=1.0,<2"]
+rabbitmq   = ["openframe-adapters-queue-rabbitmq>=1.0,<2"]
+
+# ── Group extras ───────────────────────────────────────────────────────────
+
+# All relational + document + columnar + time-series DB adapters (7 packages)
+db = [
+    "openframe-adapters[postgres]",
+    "openframe-adapters[mysql]",
+    "openframe-adapters[redis]",
+    "openframe-adapters[dynamodb]",
+    "openframe-adapters[mongo]",
+    "openframe-adapters[cassandra]",
+    "openframe-adapters[influxdb]",
+]
+
+# All vector DB adapters (5 packages)
+vector = [
+    "openframe-adapters[milvus]",
+    "openframe-adapters[chromadb]",
+    "openframe-adapters[qdrant]",
+    "openframe-adapters[faiss]",
+    "openframe-adapters[falkordb]",
+]
+
+# All message queue adapters (3 packages)
+queue = [
+    "openframe-adapters[kafka]",
+    "openframe-adapters[nats]",
+    "openframe-adapters[rabbitmq]",
+]
+
+# Everything — all 15 individual adapter packages
+all = [
+    "openframe-adapters[db]",
+    "openframe-adapters[vector]",
+    "openframe-adapters[queue]",
+]
+
+# ── Convenience combinations ───────────────────────────────────────────────
+# Common pairings used by specific templates or applications.
+
+# REST API template minimum (postgres + redis)
+rest-min = [
+    "openframe-adapters[postgres]",
+    "openframe-adapters[redis]",
+]
+
+# RAG / inference stack (vector search + graph + cache)
+rag-stack = [
+    "openframe-adapters[milvus]",
+    "openframe-adapters[falkordb]",
+    "openframe-adapters[redis]",
+]
+
+# Research Vault Phase 1 (document store + cache)
+research-min = [
+    "openframe-adapters[mongo]",
+    "openframe-adapters[redis]",
+]
+
+[tool.hatch.build.targets.wheel]
+# No Python source — this is a metadata-only package.
+# The wheel contains only the pyproject.toml metadata.
+packages = []
