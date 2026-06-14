@@ -63,7 +63,7 @@ jobs:
             PACKAGES=$(find packages meta -maxdepth 2 -name pyproject.toml 2>/dev/null \
               | sed 's|/pyproject.toml||' \
               | sort \
-              | jq -R . | jq -s .)
+              | jq -R . | jq -sc .)
           fi
 
           echo "Packages to process: $PACKAGES"
