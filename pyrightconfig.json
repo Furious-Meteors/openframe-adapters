@@ -1,0 +1,8 @@
+{
+  "extraPaths": [
+    "packages/openframe-adapters-db-postgres/",
+    "packages/openframe-adapters-db-mongo/",
+    "packages/openframe-adapters-db-redis/"
+  ],
+  "pythonVersion": "3.11"
+}
