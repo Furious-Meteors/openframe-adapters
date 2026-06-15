@@ -34,12 +34,15 @@ jobs:
         id: detect
         shell: bash
         run: |
-          set -euo pipefail
+          # Do NOT use set -e here — grep/find exit 1 on no matches
+          # which would kill the step before writing outputs.
 
-          # ── Manual trigger ──────────────────────────────────────────────
+          PACKAGES='[]'
+
+          # ── Manual trigger ────────────────────────────────────────────────
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             INPUT="${{ inputs.package_path }}"
-            INPUT="${INPUT%/}"   # strip trailing slash
+            INPUT="${INPUT%/}"
 
             if [ ! -f "${INPUT}/pyproject.toml" ]; then
               echo "ERROR: ${INPUT}/pyproject.toml not found"
@@ -49,33 +52,34 @@ jobs:
             PACKAGES=$(jq -nc --arg p "$INPUT" '[$p]')
             echo "Manual trigger — package: ${INPUT}"
 
-          # ── Automatic push trigger ──────────────────────────────────────
+          # ── Automatic push trigger ────────────────────────────────────────
           else
-            # Check whether a parent commit exists.
-            # On the very first push to a branch HEAD~1 does not exist.
+
+            # Check whether a parent commit exists
             if git rev-parse --verify HEAD~1 > /dev/null 2>&1; then
-              # Normal case — diff against parent commit
+              echo "Diff mode: HEAD~1..HEAD"
+              # grep exits 1 when no lines match — suppress with || true
               CHANGED=$(git diff --name-only HEAD~1 HEAD \
                 | grep -E '^(packages|meta)/' \
                 | awk -F/ '{print $1"/"$2}' \
                 | sort -u || true)
-              echo "Diff mode: HEAD~1..HEAD"
             else
-              # First commit on this branch — treat all packages/ and meta/ as changed
-              echo "First commit detected — scanning all packages and meta dirs"
-              CHANGED=$(find packages meta -maxdepth 1 -mindepth 1 -type d 2>/dev/null \
-                | sort -u || true)
+              echo "First commit — scanning all packages/ and meta/ dirs"
+              # find exits 1 if dirs don't exist — suppress with || true
+              CHANGED=$(find packages meta -maxdepth 1 -mindepth 1 -type d \
+                2>/dev/null | sort -u || true)
             fi
 
-            echo "Changed directories:"
+            echo "Changed directories detected:"
             echo "${CHANGED:-<none>}"
 
-            # Filter to dirs that have a pyproject.toml
+            # Build JSON array of valid package dirs
             VALID_JSON='[]'
             while IFS= read -r dir; do
               [ -z "$dir" ] && continue
               if [ -f "${dir}/pyproject.toml" ]; then
-                VALID_JSON=$(echo "$VALID_JSON" | jq --arg d "$dir" '. + [$d]')
+                VALID_JSON=$(jq -nc --argjson arr "$VALID_JSON" --arg d "$dir" \
+                  '$arr + [$d]')
                 echo "  ✓ ${dir}"
               else
                 echo "  ✗ ${dir} (no pyproject.toml — skipping)"
@@ -85,17 +89,19 @@ jobs:
             PACKAGES="$VALID_JSON"
           fi
 
-          # ── Output ───────────────────────────────────────────────────────
-          echo "Packages to process: $PACKAGES"
-          echo "packages=$PACKAGES" >> $GITHUB_OUTPUT
+          # ── Write outputs ─────────────────────────────────────────────────
+          echo "Final packages JSON: $PACKAGES"
+          echo "packages=$PACKAGES" >> "$GITHUB_OUTPUT"
 
-          COUNT=$(echo "$PACKAGES" | jq 'length')
+          COUNT=$(jq 'length' <<< "$PACKAGES")
+          echo "Package count: $COUNT"
+
           if [ "$COUNT" = "0" ]; then
-            echo "has_changes=false" >> $GITHUB_OUTPUT
-            echo "No packages to process."
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "No packages to process — downstream jobs will be skipped."
           else
-            echo "has_changes=true" >> $GITHUB_OUTPUT
-            echo "Found ${COUNT} package(s) to process."
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            echo "Found $COUNT package(s) — downstream jobs will run."
           fi
 
   # ── 2. Test each changed package ─────────────────────────────────────────
@@ -118,11 +124,11 @@ jobs:
         id: has_tests
         run: |
           if [ -d "${{ matrix.package }}/tests" ]; then
-            echo "run_tests=true" >> $GITHUB_OUTPUT
+            echo "run_tests=true" >> "$GITHUB_OUTPUT"
             echo "Found tests/ — will run test suite"
           else
-            echo "run_tests=false" >> $GITHUB_OUTPUT
-            echo "No tests/ directory — meta-package, skipping tests"
+            echo "run_tests=false" >> "$GITHUB_OUTPUT"
+            echo "No tests/ — meta-package, skipping tests"
           fi
 
       - name: Setup Python
@@ -178,10 +184,10 @@ jobs:
           NAME=$(python3 "${{ github.workspace }}/scripts/read_pkg_meta.py" --field name)
           VERSION=$(python3 "${{ github.workspace }}/scripts/read_pkg_meta.py" --field version)
           SAFE=$(echo "$NAME" | tr '.' '-')
-          echo "name=$NAME"           >> $GITHUB_OUTPUT
-          echo "version=$VERSION"     >> $GITHUB_OUTPUT
-          echo "artifact_label=$SAFE" >> $GITHUB_OUTPUT
-          echo "Building: $NAME==$VERSION"
+          echo "name=$NAME"             >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION"       >> "$GITHUB_OUTPUT"
+          echo "artifact_label=$SAFE"   >> "$GITHUB_OUTPUT"
+          echo "Building: $NAME==$VERSION from ${{ matrix.package }}"
 
       - name: Build wheel and sdist
         working-directory: ${{ matrix.package }}
@@ -234,8 +240,8 @@ jobs:
         run: |
           NAME=$(python3 "${{ github.workspace }}/scripts/read_pkg_meta.py" --field name)
           SAFE=$(echo "$NAME" | tr '.' '-')
-          echo "artifact_label=$SAFE" >> $GITHUB_OUTPUT
-          echo "name=$NAME"           >> $GITHUB_OUTPUT
+          echo "artifact_label=$SAFE" >> "$GITHUB_OUTPUT"
+          echo "name=$NAME"           >> "$GITHUB_OUTPUT"
           echo "Publishing: $NAME"
 
       - name: Download distribution artifacts
@@ -273,30 +279,33 @@ jobs:
         run: |
           PACKAGES='${{ needs.detect.outputs.packages }}'
 
-          echo "## openframe-adapters Build Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Branch:** \`${{ github.ref_name }}\`  " >> $GITHUB_STEP_SUMMARY
-          echo "**Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Packages processed" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## openframe-adapters Build Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Branch:** \`${{ github.ref_name }}\`  " >> "$GITHUB_STEP_SUMMARY"
+          echo "**Commit:** \`${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Packages processed" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
 
-          echo "$PACKAGES" | jq -r '.[]' | while read pkg; do
+          echo "$PACKAGES" | jq -r '.[]' | while read -r pkg; do
             if [ -f "${pkg}/pyproject.toml" ]; then
               cd "${pkg}"
-              NAME=$(python3 "${{ github.workspace }}/scripts/read_pkg_meta.py" --field name 2>/dev/null || echo "$pkg")
-              VER=$(python3 "${{ github.workspace }}/scripts/read_pkg_meta.py" --field version 2>/dev/null || echo "?")
+              NAME=$(python3 "${{ github.workspace }}/scripts/read_pkg_meta.py" \
+                --field name 2>/dev/null || echo "$pkg")
+              VER=$(python3 "${{ github.workspace }}/scripts/read_pkg_meta.py" \
+                --field version 2>/dev/null || echo "?")
               cd "${{ github.workspace }}"
-              echo "- \`${NAME}==${VER}\` — [pypi.org/project/${NAME}](https://pypi.org/project/${NAME}/)" >> $GITHUB_STEP_SUMMARY
+              echo "- \`${NAME}==${VER}\` — [pypi.org/project/${NAME}](https://pypi.org/project/${NAME}/)" \
+                >> "$GITHUB_STEP_SUMMARY"
             fi
           done
 
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Job results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Job | Result |" >> $GITHUB_STEP_SUMMARY
-          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Detect  | ${{ needs.detect.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Test    | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Build   | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Publish | ${{ needs.publish.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Job results" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Job | Result |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-----|--------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Detect  | ${{ needs.detect.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Test    | ${{ needs.test.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Build   | ${{ needs.build.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Publish | ${{ needs.publish.result }} |" >> "$GITHUB_STEP_SUMMARY"
