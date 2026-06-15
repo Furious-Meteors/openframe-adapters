@@ -1,14 +1,10 @@
 name: Build & Publish Python Packages
 
-# Triggers on every push to production.
-# Detects which packages/meta directories changed.
-# Builds and publishes only those — unchanged packages are never touched.
 on:
   push:
     branches:
       - production
 
-  # Manual trigger for a specific package
   workflow_dispatch:
     inputs:
       package_path:
@@ -20,26 +16,10 @@ on:
         required: true
         type: string
 
-# Grant the minimum permissions needed across all jobs.
-# id-token: write is added only on the publish job (OIDC).
-permissions:
-  contents: read
-
 jobs:
-  # ── 1. Enumerate all packages in the repo ────────────────────────────────
-  #
-  # Scans two directory roots for pyproject.toml files:
-  #   packages/  — individual adapter packages (openframe-adapters-db-postgres etc.)
-  #   meta/      — meta-packages (openframe-adapters etc.)
-  #
-  # All packages are always processed on every push. The publish step uses
-  # skip_existing: true, so already-published versions are silently skipped.
-  # Use workflow_dispatch to target a single package manually.
-  #
-  # Output: JSON array of directory paths, e.g.:
-  #   ["meta/openframe-adapters", "packages/openframe-adapters-db-mongo", ...]
+  # ── 1. Detect which packages changed ─────────────────────────────────────
   detect:
-    name: Detect Packages
+    name: Detect Changed Packages
     runs-on: ubuntu-latest
     outputs:
       packages: ${{ steps.detect.outputs.packages }}
@@ -48,8 +28,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
-      - name: Detect packages
+      - name: Detect changed packages
         id: detect
         shell: bash
         run: |
@@ -62,13 +44,23 @@ jobs:
             fi
             PACKAGES=$(jq -nc --arg p "$INPUT" '[$p]')
           else
-            # Enumerate every package that exists in the repo.
-            # publish uses skip_existing: true, so already-published versions
-            # are silently skipped — safe to attempt all packages on every push.
-            PACKAGES=$(find packages meta -maxdepth 2 -name pyproject.toml 2>/dev/null \
-              | sed 's|/pyproject.toml||' \
-              | sort \
-              | jq -R . | jq -sc .)
+            CHANGED=$(git diff --name-only HEAD~1 HEAD \
+              | grep -E '^(packages|meta)/' \
+              | awk -F/ '{print $1"/"$2}' \
+              | sort -u)
+
+            echo "Changed directories:"
+            echo "$CHANGED"
+
+            VALID_JSON='[]'
+            while IFS= read -r dir; do
+              [ -z "$dir" ] && continue
+              if [ -f "${dir}/pyproject.toml" ]; then
+                VALID_JSON=$(echo "$VALID_JSON" | jq --arg d "$dir" '. + [$d]')
+              fi
+            done <<< "$CHANGED"
+
+            PACKAGES="$VALID_JSON"
           fi
 
           echo "Packages to process: $PACKAGES"
@@ -81,25 +73,55 @@ jobs:
             echo "has_changes=true" >> $GITHUB_OUTPUT
           fi
 
-  # ── 2. Build each package ────────────────────────────────────────────────
-  #
-  # Runs python -m build inside each changed directory.
-  # Works identically for individual packages and meta-packages.
-  #
-  # Individual package example output:
-  #   openframe_adapters_db_postgres-1.0.0-py3-none-any.whl
-  #
-  # Meta-package example output:
-  #   openframe_adapters-1.0.0-py3-none-any.whl
-  #   (tiny wheel — just metadata + extras declarations, no Python code)
-  #
-  # Install surface produced by the meta-package:
-  #   pip install openframe-adapters[postgres]   → openframe-adapters-db-postgres
-  #   pip install openframe-adapters[db]         → all 12 DB adapters
-  #   pip install openframe-adapters[all]        → all 15 adapters
+  # ── 2. Test each changed package ─────────────────────────────────────────
+  test:
+    name: Test ${{ matrix.package }}
+    needs: detect
+    if: needs.detect.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJson(needs.detect.outputs.packages) }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check if package has tests
+        id: has_tests
+        run: |
+          if [ -d "${{ matrix.package }}/tests" ]; then
+            echo "run_tests=true" >> $GITHUB_OUTPUT
+          else
+            echo "run_tests=false" >> $GITHUB_OUTPUT
+            echo "No tests/ directory — meta-package, skipping tests"
+          fi
+
+      - name: Setup Python
+        if: steps.has_tests.outputs.run_tests == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install package and dev dependencies
+        if: steps.has_tests.outputs.run_tests == 'true'
+        working-directory: ${{ matrix.package }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run test suite
+        if: steps.has_tests.outputs.run_tests == 'true'
+        working-directory: ${{ matrix.package }}
+        run: pytest tests/ -v --tb=short
+
+  # ── 3. Build each changed package ────────────────────────────────────────
   build:
     name: Build ${{ matrix.package }}
-    needs: detect
+    needs: [detect, test]
     if: needs.detect.outputs.has_changes == 'true'
     runs-on: ubuntu-latest
 
@@ -123,27 +145,18 @@ jobs:
           python -m pip install --upgrade pip
           pip install build
 
-      - name: Read package name and version from pyproject.toml
+      - name: Read package metadata
         id: pkg_meta
         working-directory: ${{ matrix.package }}
+        # Use the helper script — avoids shell/Python heredoc quoting issues
+        # with curly braces in authors = [{ name = "...", email = "..." }]
         run: |
-          NAME=$(python3 -c "
-          import tomllib
-          with open('pyproject.toml', 'rb') as f:
-              d = tomllib.load(f)
-          print(d['project']['name'])
-          ")
-          VERSION=$(python3 -c "
-          import tomllib
-          with open('pyproject.toml', 'rb') as f:
-              d = tomllib.load(f)
-          print(d['project']['version'])
-          ")
-          # Safe artifact label — hyphens only, no dots
+          NAME=$(python3 "${{ github.workspace }}/scripts/read_pkg_meta.py" --field name)
+          VERSION=$(python3 "${{ github.workspace }}/scripts/read_pkg_meta.py" --field version)
           SAFE=$(echo "$NAME" | tr '.' '-')
-          echo "name=$NAME"       >> $GITHUB_OUTPUT
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "artifact_label=$SAFE" >> $GITHUB_OUTPUT
+          echo "name=$NAME"             >> $GITHUB_OUTPUT
+          echo "version=$VERSION"       >> $GITHUB_OUTPUT
+          echo "artifact_label=$SAFE"   >> $GITHUB_OUTPUT
           echo "Building: $NAME==$VERSION from ${{ matrix.package }}"
 
       - name: Build wheel and sdist
@@ -162,27 +175,6 @@ jobs:
           retention-days: 7
 
   # ── 4. Publish each changed package to PyPI ──────────────────────────────
-  #
-  # Each matrix leg publishes one PyPI package independently.
-  # skip_existing: true means workflow retries never fail on already-published versions.
-  #
-  # PyPI packages published by this workflow (examples):
-  #
-  #   packages/openframe-adapters-db-postgres  →  openframe-adapters-db-postgres
-  #   packages/openframe-adapters-db-mongo     →  openframe-adapters-db-mongo
-  #   packages/openframe-adapters-db-redis     →  openframe-adapters-db-redis
-  #   meta/openframe-adapters                  →  openframe-adapters
-  #                                               (enables pip install openframe-adapters[postgres])
-  #                                               (enables pip install openframe-adapters[db])
-  #                                               (enables pip install openframe-adapters[all])
-  #
-  # Trusted Publishing setup (per package, one-time):
-  #   https://pypi.org/manage/project/<name>/settings/publishing/
-  #   Owner:    Furious-Meteors
-  #   Repo:     openframe-adapters
-  #   Workflow: python-build.yml
-  #   Env:      pypi
-  # ── 3. Publish each package to PyPI ──────────────────────────────────────
   publish:
     name: Publish ${{ matrix.package }}
     needs: [detect, build]
@@ -207,19 +199,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Read artifact label from pyproject.toml
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Read artifact label
         id: pkg_meta
         working-directory: ${{ matrix.package }}
         run: |
-          NAME=$(python3 -c "
-          import tomllib
-          with open('pyproject.toml', 'rb') as f:
-              d = tomllib.load(f)
-          print(d['project']['name'])
-          ")
+          NAME=$(python3 "${{ github.workspace }}/scripts/read_pkg_meta.py" --field name)
           SAFE=$(echo "$NAME" | tr '.' '-')
           echo "artifact_label=$SAFE" >> $GITHUB_OUTPUT
-          echo "name=$NAME" >> $GITHUB_OUTPUT
+          echo "name=$NAME"           >> $GITHUB_OUTPUT
           echo "Publishing: $NAME"
 
       - name: Download distribution artifacts
@@ -237,16 +229,21 @@ jobs:
           password: ${{ secrets.PYPI_API_TOKEN }}
           skip_existing: true
 
-  # ── 4. Pipeline summary ───────────────────────────────────────────────────
+  # ── 5. Pipeline summary ───────────────────────────────────────────────────
   summary:
     name: Summary
-    needs: [detect, build, publish]
+    needs: [detect, test, build, publish]
     if: always()
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
       - name: Write job summary
         run: |
@@ -257,24 +254,13 @@ jobs:
           echo "**Branch:** \`${{ github.ref_name }}\`  " >> $GITHUB_STEP_SUMMARY
           echo "**Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-
           echo "### Packages processed" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
           echo "$PACKAGES" | jq -r '.[]' | while read pkg; do
             if [ -f "${pkg}/pyproject.toml" ]; then
-              NAME=$(python3 -c "
-          import tomllib
-          with open('${pkg}/pyproject.toml', 'rb') as f:
-              d = tomllib.load(f)
-          print(d['project']['name'])
-              " 2>/dev/null || echo "$pkg")
-              VER=$(python3 -c "
-          import tomllib
-          with open('${pkg}/pyproject.toml', 'rb') as f:
-              d = tomllib.load(f)
-          print(d['project']['version'])
-              " 2>/dev/null || echo "?")
+              NAME=$(python3 scripts/read_pkg_meta.py --field name 2>/dev/null || echo "$pkg")
+              VER=$(python3 scripts/read_pkg_meta.py --field version 2>/dev/null || echo "?")
               echo "- \`${NAME}==${VER}\` — [pypi.org/project/${NAME}](https://pypi.org/project/${NAME}/)" >> $GITHUB_STEP_SUMMARY
             fi
           done
@@ -285,5 +271,6 @@ jobs:
           echo "| Job | Result |" >> $GITHUB_STEP_SUMMARY
           echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| Detect  | ${{ needs.detect.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Test    | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Build   | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Publish | ${{ needs.publish.result }} |" >> $GITHUB_STEP_SUMMARY
