@@ -37,21 +37,8 @@ classifiers = [
     "Typing :: Typed",
 ]
 
-[[project.authors]]
-name = "Furious Meteors Engineering"
-email = "engineering@furiousmeteors.dev"
-
-[[project.maintainers]]
-name = "Furious Meteors Engineering"
-email = "engineering@furiousmeteors.dev"
-
-[project.urls]
-Homepage      = "https://github.com/Furious-Meteors/openframe-adapters"
-Documentation = "https://furious-meteors.github.io/openframe-adapters/"
-Repository    = "https://github.com/Furious-Meteors/openframe-adapters"
-Changelog     = "https://github.com/Furious-Meteors/openframe-adapters/blob/production/.github/CHANGELOG.md"
-"Bug Tracker" = "https://github.com/Furious-Meteors/openframe-adapters/issues"
-
+# dependencies must come before [project.urls] —
+# TOML sections stay open until the next [header]
 dependencies = []
 
 [project.optional-dependencies]
@@ -99,6 +86,23 @@ all = [
 rest-min     = ["openframe-adapters[postgres]", "openframe-adapters[redis]"]
 rag-stack    = ["openframe-adapters[milvus]", "openframe-adapters[falkordb]", "openframe-adapters[redis]"]
 research-min = ["openframe-adapters[mongo]", "openframe-adapters[redis]"]
+
+[[project.authors]]
+name = "Furious Meteors Engineering"
+email = "engineering@furiousmeteors.dev"
+
+[[project.maintainers]]
+name = "Furious Meteors Engineering"
+email = "engineering@furiousmeteors.dev"
+
+# [project.urls] must come after all [project] scalar fields and
+# [project.optional-dependencies] — never before dependencies = []
+[project.urls]
+Homepage      = "https://github.com/Furious-Meteors/openframe-adapters"
+Documentation = "https://furious-meteors.github.io/openframe-adapters/"
+Repository    = "https://github.com/Furious-Meteors/openframe-adapters"
+Changelog     = "https://github.com/Furious-Meteors/openframe-adapters/blob/production/.github/CHANGELOG.md"
+"Bug Tracker" = "https://github.com/Furious-Meteors/openframe-adapters/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = []
