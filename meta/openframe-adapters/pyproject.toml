@@ -1,6 +1,6 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "openframe-adapters"
@@ -36,9 +36,6 @@ classifiers = [
     "Topic :: System :: Distributed Computing",
     "Typing :: Typed",
 ]
-
-# dependencies must come before [project.urls] —
-# TOML sections stay open until the next [header]
 dependencies = []
 
 [project.optional-dependencies]
@@ -95,8 +92,6 @@ email = "engineering@furiousmeteors.dev"
 name = "Furious Meteors Engineering"
 email = "engineering@furiousmeteors.dev"
 
-# [project.urls] must come after all [project] scalar fields and
-# [project.optional-dependencies] — never before dependencies = []
 [project.urls]
 Homepage      = "https://github.com/Furious-Meteors/openframe-adapters"
 Documentation = "https://furious-meteors.github.io/openframe-adapters/"
@@ -104,5 +99,9 @@ Repository    = "https://github.com/Furious-Meteors/openframe-adapters"
 Changelog     = "https://github.com/Furious-Meteors/openframe-adapters/blob/production/.github/CHANGELOG.md"
 "Bug Tracker" = "https://github.com/Furious-Meteors/openframe-adapters/issues"
 
-[tool.hatch.build.targets.wheel]
-packages = []
+# setuptools with empty find — the correct approach for metadata-only packages.
+# hatchling does not support packages=[] cleanly; flit-core requires a module.
+# setuptools with include=[] produces a valid wheel containing only dist-info.
+[tool.setuptools.packages.find]
+where = ["."]
+include = []
