@@ -11,10 +11,10 @@ requires-python = ">=3.11"
 license = { text = "MIT" }
 
 authors = [
-    { name = "Furious Meteors Engineering", email = "amritanshupandey.meritocrat@gmail.com"" },
+    { name = "Amritanshu Pandey", email = "amritanshupandey.meritocrat@gmail.com"" },
 ]
 maintainers = [
-    { name = "Furious Meteors Engineering", email = "amritanshupandey.meritocrat@gmail.com"" },
+    { name = "Amritanshu Pandey", email = "amritanshupandey.meritocrat@gmail.com"" },
 ]
 
 keywords = [
