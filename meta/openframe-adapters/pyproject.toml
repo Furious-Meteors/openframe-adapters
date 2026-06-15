@@ -4,19 +4,11 @@ build-backend = "hatchling.build"
 
 [project]
 name = "openframe-adapters"
-version = "1.0.0"
-description = "OpenFrame Microservice Suite — adapter meta-package. Install adapters by name or group."
+version = "1.0.1"
+description = "OpenFrame Microservice Suite - adapter meta-package. Install adapters by name or group."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
-
-authors = [
-    { name = "Amritanshu Pandey", email = "amritanshupandey.meritocrat@gmail.com"" },
-]
-maintainers = [
-    { name = "Amritanshu Pandey", email = "amritanshupandey.meritocrat@gmail.com"" },
-]
-
+license = {text = "MIT"}
 keywords = [
     "openframe",
     "hexagonal",
@@ -30,7 +22,6 @@ keywords = [
     "fastapi",
     "modal",
 ]
-
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
@@ -46,6 +37,14 @@ classifiers = [
     "Typing :: Typed",
 ]
 
+[[project.authors]]
+name = "Furious Meteors Engineering"
+email = "engineering@furiousmeteors.dev"
+
+[[project.maintainers]]
+name = "Furious Meteors Engineering"
+email = "engineering@furiousmeteors.dev"
+
 [project.urls]
 Homepage      = "https://github.com/Furious-Meteors/openframe-adapters"
 Documentation = "https://furious-meteors.github.io/openframe-adapters/"
@@ -53,13 +52,9 @@ Repository    = "https://github.com/Furious-Meteors/openframe-adapters"
 Changelog     = "https://github.com/Furious-Meteors/openframe-adapters/blob/production/.github/CHANGELOG.md"
 "Bug Tracker" = "https://github.com/Furious-Meteors/openframe-adapters/issues"
 
-# The meta-package has no runtime dependencies of its own.
-# openframe-core is a transitive dependency through every individual adapter package.
 dependencies = []
 
 [project.optional-dependencies]
-
-# ── Individual adapters ────────────────────────────────────────────────────
 postgres   = ["openframe-adapters-db-postgres>=1.0,<2"]
 mysql      = ["openframe-adapters-db-mysql>=1.0,<2"]
 redis      = ["openframe-adapters-db-redis>=1.0,<2"]
@@ -75,8 +70,6 @@ falkordb   = ["openframe-adapters-db-falkordb>=1.0,<2"]
 kafka      = ["openframe-adapters-queue-kafka>=1.0,<2"]
 nats       = ["openframe-adapters-queue-nats>=1.0,<2"]
 rabbitmq   = ["openframe-adapters-queue-rabbitmq>=1.0,<2"]
-
-# ── Group extras ───────────────────────────────────────────────────────────
 db = [
     "openframe-adapters[postgres]",
     "openframe-adapters[mysql]",
@@ -103,12 +96,9 @@ all = [
     "openframe-adapters[vector]",
     "openframe-adapters[queue]",
 ]
-
-# ── Convenience bundles ────────────────────────────────────────────────────
 rest-min     = ["openframe-adapters[postgres]", "openframe-adapters[redis]"]
 rag-stack    = ["openframe-adapters[milvus]", "openframe-adapters[falkordb]", "openframe-adapters[redis]"]
 research-min = ["openframe-adapters[mongo]", "openframe-adapters[redis]"]
 
 [tool.hatch.build.targets.wheel]
-# No Python source — metadata-only package.
 packages = []
