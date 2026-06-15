@@ -27,38 +27,120 @@ class TestMongoRepositoryContracts(RepositoryContractTests):
     """
     MongoRepository passes the full openframe contract suite.
 
-    All 18 RepositoryContractTests run against a mocked Motor client.
+    All 18 RepositoryContractTests run against a stateful in-memory mock.
+    The mock simulates Motor's Collection API so create→get, list pagination,
+    update, and delete all behave like a real MongoDB collection.
     No real MongoDB required.
     """
 
     @pytest.fixture
-    def repository(self, mock_settings, mock_client, mock_collection):
+    def repository(self, mock_settings):
         import openframe.adapters.db.mongo.connection as conn_module
-        conn_module._client_cache[mock_settings.mongo_url] = mock_client
-        # Configure sensible mock defaults for contract tests
-        mock_collection.find_one.return_value = {
-            "_id": "1", "id": "1", "name": "test"
-        }
-        insert_result = MagicMock()
-        insert_result.inserted_id = "1"
-        mock_collection.insert_one.return_value = insert_result
-        mock_collection.find_one_and_update.return_value = {
-            "_id": "1", "id": "1", "name": "test"
-        }
-        result_mock = MagicMock()
-        result_mock.deleted_count = 1
-        mock_collection.delete_one.return_value = result_mock
-        mock_collection.count_documents.return_value = 1
-        cursor = mock_collection.find.return_value
-        cursor.to_list.return_value = [{"_id": "1", "id": "1", "name": "test"}]
+
+        # In-memory document store: str(_id) → raw doc dict (without "id" mirror key)
+        store: dict = {}
+
+        # ── Stateful Motor collection mock ────────────────────────────────
+        mock_col = MagicMock()
+
+        async def _insert_one(doc):
+            d = dict(doc)
+            id_str = str(d.get("_id", ""))
+            # Store raw doc without "id" mirror — _serialise_doc adds it on read
+            raw = {"_id": id_str}
+            raw.update({k: v for k, v in d.items() if k not in ("_id", "id")})
+            store[id_str] = raw
+            r = MagicMock()
+            r.inserted_id = id_str
+            return r
+
+        async def _find_one(query, *args, **kwargs):
+            raw_id = query.get("_id")
+            id_str = str(raw_id) if raw_id is not None else None
+            if id_str is None:
+                return None
+            return dict(store[id_str]) if id_str in store else None
+
+        def _make_cursor():
+            """Return a fresh cursor with isolated skip/limit state."""
+            state = {"skip": 0, "limit": 0}
+            cur = MagicMock()
+
+            def _skip(n):
+                state["skip"] = n
+                return cur
+
+            def _limit(n):
+                state["limit"] = n
+                return cur
+
+            async def _to_list(*args, **kwargs):
+                docs = list(store.values())
+                s = state["skip"]
+                ln = state["limit"]
+                sliced = docs[s: s + ln] if ln else docs[s:]
+                return [dict(d) for d in sliced]
+
+            cur.skip = MagicMock(side_effect=_skip)
+            cur.limit = MagicMock(side_effect=_limit)
+            cur.to_list = AsyncMock(side_effect=_to_list)
+            return cur
+
+        async def _count_documents(*args, **kwargs):
+            return len(store)
+
+        async def _find_one_and_update(query, update, *args, **kwargs):
+            raw_id = query.get("_id")
+            id_str = str(raw_id) if raw_id is not None else None
+            if id_str is None or id_str not in store:
+                return None
+            doc = dict(store[id_str])
+            doc.update(update.get("$set", {}))
+            store[id_str] = doc
+            return dict(doc)
+
+        async def _delete_one(query, *args, **kwargs):
+            raw_id = query.get("_id")
+            id_str = str(raw_id) if raw_id is not None else ""
+            r = MagicMock()
+            if id_str in store:
+                del store[id_str]
+                r.deleted_count = 1
+            else:
+                r.deleted_count = 0
+            return r
+
+        mock_col.insert_one = AsyncMock(side_effect=_insert_one)
+        mock_col.find_one = AsyncMock(side_effect=_find_one)
+        mock_col.find = MagicMock(side_effect=lambda *a, **kw: _make_cursor())
+        mock_col.count_documents = AsyncMock(side_effect=_count_documents)
+        mock_col.find_one_and_update = AsyncMock(side_effect=_find_one_and_update)
+        mock_col.delete_one = AsyncMock(side_effect=_delete_one)
+        mock_col.list_collection_names = AsyncMock(return_value=["items"])
+
+        # ── Wire mock client → db → collection ───────────────────────────
+        db = MagicMock()
+        db.__getitem__ = MagicMock(return_value=mock_col)
+        db.list_collection_names = AsyncMock(return_value=["items"])
+
+        client = MagicMock()
+        client.__getitem__ = MagicMock(return_value=db)
+        client.admin = MagicMock()
+        client.admin.command = AsyncMock(return_value={"ok": 1})
+        client.close = MagicMock()
+
+        conn_module._client_cache[mock_settings.mongo_url] = client
         r = MongoRepository(mock_settings, collection="items")
         yield r
         conn_module._client_cache.clear()
+        store.clear()
 
     @pytest.fixture
     def make_entity(self):
+        # Return the Mongo-native entity format (with both _id and id) so that
+        # assert result == entity passes after _serialise_doc adds the id mirror.
         def _make(id: str, name: str = "test") -> dict:
-            return {"id": id, "name": name}
+            return {"_id": id, "id": id, "name": name}
         return _make
 
 
