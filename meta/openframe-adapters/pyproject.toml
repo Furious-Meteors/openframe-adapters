@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=61"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "openframe-adapters"
@@ -9,6 +9,14 @@ description = "OpenFrame Microservice Suite — adapter meta-package. Install ad
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
+
+authors = [
+    { name = "Furious Meteors Engineering", email = "amritanshupandey.meritocrat@gmail.com"" },
+]
+maintainers = [
+    { name = "Furious Meteors Engineering", email = "amritanshupandey.meritocrat@gmail.com"" },
+]
+
 keywords = [
     "openframe",
     "hexagonal",
@@ -18,50 +26,57 @@ keywords = [
     "redis",
     "kafka",
     "vector-database",
+    "adapter",
+    "fastapi",
+    "modal",
 ]
 
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Database",
+    "Topic :: System :: Distributed Computing",
+    "Typing :: Typed",
+]
+
+[project.urls]
+Homepage      = "https://github.com/Furious-Meteors/openframe-adapters"
+Documentation = "https://furious-meteors.github.io/openframe-adapters/"
+Repository    = "https://github.com/Furious-Meteors/openframe-adapters"
+Changelog     = "https://github.com/Furious-Meteors/openframe-adapters/blob/production/.github/CHANGELOG.md"
+"Bug Tracker" = "https://github.com/Furious-Meteors/openframe-adapters/issues"
+
 # The meta-package has no runtime dependencies of its own.
-# openframe-core is a transitive dependency — every individual
-# adapter package already pins it. Installing any extra pulls
-# openframe-core in automatically.
+# openframe-core is a transitive dependency through every individual adapter package.
 dependencies = []
 
 [project.optional-dependencies]
 
 # ── Individual adapters ────────────────────────────────────────────────────
-
-# Relational
 postgres   = ["openframe-adapters-db-postgres>=1.0,<2"]
 mysql      = ["openframe-adapters-db-mysql>=1.0,<2"]
-
-# Key-value
 redis      = ["openframe-adapters-db-redis>=1.0,<2"]
 dynamodb   = ["openframe-adapters-db-dynamodb>=1.0,<2"]
-
-# Document
 mongo      = ["openframe-adapters-db-mongo>=1.0,<2"]
-
-# Columnar
 cassandra  = ["openframe-adapters-db-cassandra>=1.0,<2"]
-
-# Time-series
 influxdb   = ["openframe-adapters-db-influxdb>=1.0,<2"]
-
-# Vector
 milvus     = ["openframe-adapters-db-milvus>=1.0,<2"]
 chromadb   = ["openframe-adapters-db-chromadb>=1.0,<2"]
 qdrant     = ["openframe-adapters-db-qdrant>=1.0,<2"]
 faiss      = ["openframe-adapters-db-faiss>=1.0,<2"]
 falkordb   = ["openframe-adapters-db-falkordb>=1.0,<2"]
-
-# Queues
 kafka      = ["openframe-adapters-queue-kafka>=1.0,<2"]
 nats       = ["openframe-adapters-queue-nats>=1.0,<2"]
 rabbitmq   = ["openframe-adapters-queue-rabbitmq>=1.0,<2"]
 
 # ── Group extras ───────────────────────────────────────────────────────────
-
-# All relational + document + columnar + time-series DB adapters (7 packages)
 db = [
     "openframe-adapters[postgres]",
     "openframe-adapters[mysql]",
@@ -71,8 +86,6 @@ db = [
     "openframe-adapters[cassandra]",
     "openframe-adapters[influxdb]",
 ]
-
-# All vector DB adapters (5 packages)
 vector = [
     "openframe-adapters[milvus]",
     "openframe-adapters[chromadb]",
@@ -80,44 +93,22 @@ vector = [
     "openframe-adapters[faiss]",
     "openframe-adapters[falkordb]",
 ]
-
-# All message queue adapters (3 packages)
 queue = [
     "openframe-adapters[kafka]",
     "openframe-adapters[nats]",
     "openframe-adapters[rabbitmq]",
 ]
-
-# Everything — all 15 individual adapter packages
 all = [
     "openframe-adapters[db]",
     "openframe-adapters[vector]",
     "openframe-adapters[queue]",
 ]
 
-# ── Convenience combinations ───────────────────────────────────────────────
-# Common pairings used by specific templates or applications.
+# ── Convenience bundles ────────────────────────────────────────────────────
+rest-min     = ["openframe-adapters[postgres]", "openframe-adapters[redis]"]
+rag-stack    = ["openframe-adapters[milvus]", "openframe-adapters[falkordb]", "openframe-adapters[redis]"]
+research-min = ["openframe-adapters[mongo]", "openframe-adapters[redis]"]
 
-# REST API template minimum (postgres + redis)
-rest-min = [
-    "openframe-adapters[postgres]",
-    "openframe-adapters[redis]",
-]
-
-# RAG / inference stack (vector search + graph + cache)
-rag-stack = [
-    "openframe-adapters[milvus]",
-    "openframe-adapters[falkordb]",
-    "openframe-adapters[redis]",
-]
-
-# Research Vault Phase 1 (document store + cache)
-research-min = [
-    "openframe-adapters[mongo]",
-    "openframe-adapters[redis]",
-]
-
-[tool.setuptools]
-# No Python source — this is a metadata-only package.
-# setuptools builds an empty wheel containing only the package metadata.
+[tool.hatch.build.targets.wheel]
+# No Python source — metadata-only package.
 packages = []
