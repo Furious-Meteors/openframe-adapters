@@ -1,0 +1,157 @@
+"""
+openframe/adapters/db/mongo/plugin.py
+=======================================
+OpenFrame plugin wrapper for MongoRepository.
+
+Stability: beta
+Capability: "persistence"
+
+Usage via PluginRegistry (optional)::
+
+    from openframe.core.plugins import PluginRegistry
+    from openframe.adapters.db.mongo import MongoPlugin, MongoSettings
+
+    registry = PluginRegistry()
+    registry.register(MongoPlugin(MongoSettings(), collection="documents"))
+    await registry.initialize_all()
+
+    plugin = registry.get("persistence")
+    repo = plugin.get_repository()
+
+Usage via deps.py (unchanged, no plugin needed)::
+
+    repo = MongoRepository(MongoSettings(), collection="documents")
+"""
+from __future__ import annotations
+
+import logging
+
+from openframe.core.exceptions import AdapterConnectionError
+from openframe.core.plugins import PluginContext, PluginHealth, PluginStatus
+
+from openframe.adapters.db.mongo.config import MongoSettings
+from openframe.adapters.db.mongo.connection import _client_cache, get_mongo_client
+from openframe.adapters.db.mongo.repository import MongoRepository
+
+__all__ = ["MongoPlugin"]
+
+_logger = logging.getLogger(__name__)
+
+
+class MongoPlugin:
+    """
+    MongoDB adapter plugin for the OpenFrame plugin registry.
+
+    Capability: "persistence"
+
+    Lifecycle:
+        initialize() — creates the Motor client (lazy) and verifies
+                       connectivity via ping(). Raises AdapterConnectionError
+                       if MongoDB is unreachable.
+        shutdown()   — closes the client connection. Never raises.
+        health()     — calls ping() and returns PluginHealth. Never raises.
+
+    The plugin exposes get_repository() after initialization for use
+    in the composition root or ApplicationBootstrap.
+    """
+
+    name:       str = "openframe-mongo"
+    version:    str = "1.1.0"
+    capability: str = "persistence"
+
+    def __init__(
+        self,
+        settings: MongoSettings,
+        collection: str = "documents",
+    ) -> None:
+        self._settings = settings
+        self._collection = collection
+        self._repo: MongoRepository | None = None
+        self._status = PluginStatus.REGISTERED
+
+    async def initialize(self, context: PluginContext) -> None:
+        """
+        Initialize the MongoDB client and verify connectivity.
+
+        Args:
+            context: Plugin context (config, plugin_name). Unused here —
+                     settings are provided at construction time.
+
+        Raises:
+            AdapterConnectionError: MongoDB is unreachable or credentials
+                                    are invalid.
+        """
+        self._status = PluginStatus.INITIALIZED
+        try:
+            get_mongo_client(self._settings)
+            self._repo = MongoRepository(self._settings, collection=self._collection)
+            if not await self._repo.ping():
+                raise AdapterConnectionError(
+                    "MongoDB ping failed after client creation",
+                    adapter="mongo",
+                    operation="initialize",
+                )
+            self._status = PluginStatus.READY
+            _logger.info(
+                "MongoPlugin initialized — %s/%s",
+                self._settings.mongo_url.split("@")[-1],
+                self._settings.mongo_database,
+            )
+        except Exception:
+            self._status = PluginStatus.FAILED
+            raise
+
+    async def shutdown(self) -> None:
+        """
+        Close the MongoDB client connection.
+
+        Never raises — logs errors and continues.
+        """
+        self._status = PluginStatus.STOPPING
+        try:
+            if self._repo is not None:
+                await self._repo.close()
+                _logger.info("MongoPlugin shutdown complete.")
+        except Exception as exc:
+            _logger.error("MongoPlugin shutdown error (ignored): %s", exc)
+        finally:
+            self._status = PluginStatus.STOPPED
+
+    async def health(self) -> PluginHealth:
+        """
+        Return current health snapshot.
+
+        Never raises — returns FAILED status on any exception.
+        """
+        try:
+            if self._repo is None or self._status != PluginStatus.READY:
+                return PluginHealth(
+                    status=PluginStatus.FAILED,
+                    message=f"Plugin status: {self._status.name}",
+                )
+            healthy = await self._repo.ping()
+            return PluginHealth(
+                status=PluginStatus.READY if healthy else PluginStatus.FAILED,
+                message="" if healthy else "ping() returned False",
+            )
+        except Exception as exc:
+            return PluginHealth(
+                status=PluginStatus.FAILED,
+                message=str(exc),
+            )
+
+    def get_repository(self) -> MongoRepository:
+        """
+        Return the initialized repository.
+
+        Only valid after registry.initialize_all() has been called.
+
+        Raises:
+            RuntimeError: Plugin not yet initialized.
+        """
+        if self._repo is None or self._status != PluginStatus.READY:
+            raise RuntimeError(
+                f"MongoPlugin is not ready (status: {self._status.name}). "
+                "Call await registry.initialize_all() first."
+            )
+        return self._repo

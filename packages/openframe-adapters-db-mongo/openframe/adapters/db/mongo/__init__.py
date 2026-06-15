@@ -40,10 +40,12 @@ from __future__ import annotations
 
 from .config import MongoSettings
 from .connection import get_mongo_client
+from .plugin import MongoPlugin
 from .repository import MongoRepository
 
 __all__ = [
     "MongoSettings",
     "MongoRepository",
     "get_mongo_client",
+    "MongoPlugin",
 ]

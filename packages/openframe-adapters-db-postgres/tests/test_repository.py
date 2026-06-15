@@ -1,7 +1,8 @@
 """
-tests/test_repository.py
-==========================
-Unit tests for PostgresRepository CRUD operations and Protocol conformance.
+tests/test_repository.py — openframe-adapters-db-postgres
+===========================================================
+Contract tests (RepositoryContractTests) run first, then adapter-specific
+unit tests covering PostgreSQL error mapping and driver behaviour.
 """
 from __future__ import annotations
 
@@ -13,6 +14,103 @@ from openframe.adapters.db.postgres import PostgresRepository
 from openframe.core.exceptions import AdapterConfigurationError, AdapterQueryError, AdapterTimeoutError
 from openframe.core.health import HealthCheck
 from openframe.core.ports import BaseRepository
+from openframe.core.testing import RepositoryContractTests
+
+
+# ── Contract tests — must pass for every BaseRepository implementation ─────
+
+class TestPostgresRepositoryContracts(RepositoryContractTests):
+    """
+    PostgresRepository passes the full openframe contract suite.
+
+    All 18 RepositoryContractTests run against a mocked asyncpg pool.
+    No real database required.
+    """
+
+    @pytest.fixture
+    def repository(self, mock_settings, mock_pool):
+        """
+        PostgresRepository backed by a stateful in-memory mock pool.
+
+        The mock pool tracks insertions, updates, and deletions so that the
+        RepositoryContractTests behavioural assertions (create → get, list
+        pagination, etc.) pass without a real database.
+        """
+        import re
+        from unittest.mock import AsyncMock
+
+        import openframe.adapters.db.postgres.connection as conn_module
+
+        conn_module._pool_cache[mock_settings.database_url] = mock_pool
+
+        # In-memory store that simulates the database table.
+        _store: dict[str, dict] = {}
+
+        def _fetchrow(query: str, *args):
+            q = query.upper()
+            if "INSERT" in q:
+                # Parse column list from: INSERT INTO tbl (col1, col2) VALUES ...
+                m = re.search(r"\(([^)]+)\)\s*VALUES", query, re.IGNORECASE)
+                cols = [c.strip() for c in m.group(1).split(",")] if m else []
+                row = dict(zip(cols, args))
+                _store[str(row.get("id", ""))] = row
+                return row
+            if "UPDATE" in q:
+                # Last arg is the WHERE id value.
+                entity_id = str(args[-1])
+                if entity_id not in _store:
+                    return None
+                # Parse SET columns: UPDATE tbl SET col=$1,... WHERE id=$N
+                m = re.search(r"SET\s+(.+?)\s+WHERE", query, re.IGNORECASE)
+                set_cols = (
+                    [p.strip().split("=")[0].strip() for p in m.group(1).split(",")]
+                    if m
+                    else []
+                )
+                row = dict(_store[entity_id])
+                for i, col in enumerate(set_cols):
+                    row[col] = args[i]
+                _store[entity_id] = row
+                return row
+            # SELECT — first arg is entity_id.
+            entity_id = str(args[0]) if args else ""
+            return _store.get(entity_id)
+
+        def _execute(query: str, *args):
+            if "DELETE" in query.upper():
+                entity_id = str(args[0]) if args else ""
+                if entity_id in _store:
+                    del _store[entity_id]
+                    return "DELETE 1"
+                return "DELETE 0"
+            return ""
+
+        def _conn_fetch(query: str, limit: int, offset: int):
+            items = list(_store.values())
+            return items[offset : offset + limit]
+
+        def _conn_fetchval(query: str):
+            return len(_store)
+
+        mock_pool.fetchrow = AsyncMock(side_effect=_fetchrow)
+        mock_pool.execute = AsyncMock(side_effect=_execute)
+        mock_pool.fetchval = AsyncMock(return_value=1)  # ping / is_ready
+        conn = mock_pool.acquire.return_value
+        conn.fetch = AsyncMock(side_effect=_conn_fetch)
+        conn.fetchval = AsyncMock(side_effect=_conn_fetchval)
+
+        r = PostgresRepository(mock_settings, table="items", id_column="id")
+        yield r
+        conn_module._pool_cache.clear()
+
+    @pytest.fixture
+    def make_entity(self):
+        def _make(id: str, name: str = "test") -> dict:
+            return {"id": id, "name": name}
+        return _make
+
+
+# ── Adapter-specific tests — beyond what the contract covers ───────────────
 
 
 # ---------------------------------------------------------------------------

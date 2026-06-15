@@ -38,10 +38,12 @@ from __future__ import annotations
 
 from .config import PostgresSettings
 from .connection import get_postgres_pool
+from .plugin import PostgresPlugin
 from .repository import PostgresRepository
 
 __all__ = [
     "PostgresSettings",
     "PostgresRepository",
     "get_postgres_pool",
+    "PostgresPlugin",
 ]

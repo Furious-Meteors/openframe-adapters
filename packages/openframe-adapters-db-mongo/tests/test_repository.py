@@ -1,7 +1,8 @@
 """
-tests/test_repository.py
-==========================
-Unit tests for MongoRepository CRUD operations and Protocol conformance.
+tests/test_repository.py — openframe-adapters-db-mongo
+========================================================
+Contract tests (RepositoryContractTests) run first, then adapter-specific
+unit tests covering MongoDB error mapping and driver behaviour.
 """
 from __future__ import annotations
 
@@ -17,6 +18,51 @@ from openframe.adapters.db.mongo import MongoRepository, MongoSettings
 from openframe.core.exceptions import AdapterConfigurationError, AdapterConnectionError, AdapterQueryError, AdapterTimeoutError
 from openframe.core.health import HealthCheck
 from openframe.core.ports import BaseRepository
+from openframe.core.testing import RepositoryContractTests
+
+
+# ── Contract tests — must pass for every BaseRepository implementation ─────
+
+class TestMongoRepositoryContracts(RepositoryContractTests):
+    """
+    MongoRepository passes the full openframe contract suite.
+
+    All 18 RepositoryContractTests run against a mocked Motor client.
+    No real MongoDB required.
+    """
+
+    @pytest.fixture
+    def repository(self, mock_settings, mock_client, mock_collection):
+        import openframe.adapters.db.mongo.connection as conn_module
+        conn_module._client_cache[mock_settings.mongo_url] = mock_client
+        # Configure sensible mock defaults for contract tests
+        mock_collection.find_one.return_value = {
+            "_id": "1", "id": "1", "name": "test"
+        }
+        insert_result = MagicMock()
+        insert_result.inserted_id = "1"
+        mock_collection.insert_one.return_value = insert_result
+        mock_collection.find_one_and_update.return_value = {
+            "_id": "1", "id": "1", "name": "test"
+        }
+        result_mock = MagicMock()
+        result_mock.deleted_count = 1
+        mock_collection.delete_one.return_value = result_mock
+        mock_collection.count_documents.return_value = 1
+        cursor = mock_collection.find.return_value
+        cursor.to_list.return_value = [{"_id": "1", "id": "1", "name": "test"}]
+        r = MongoRepository(mock_settings, collection="items")
+        yield r
+        conn_module._client_cache.clear()
+
+    @pytest.fixture
+    def make_entity(self):
+        def _make(id: str, name: str = "test") -> dict:
+            return {"id": id, "name": name}
+        return _make
+
+
+# ── Adapter-specific tests — beyond what the contract covers ───────────────
 
 
 # ---------------------------------------------------------------------------

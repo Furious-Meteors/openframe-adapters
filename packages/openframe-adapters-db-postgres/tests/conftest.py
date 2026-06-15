@@ -1,13 +1,19 @@
 """
-tests/conftest.py
-==================
-Shared pytest fixtures for openframe-adapters-db-postgres.
+tests/conftest.py — openframe-adapters-db-postgres
+=====================================================
+OTel reset fixtures are provided by openframe.core.testing.fixtures.
+This file contains only adapter-specific fixtures.
 
 All tests run with zero network calls. asyncpg is mocked at the
 ``openframe.adapters.db.postgres.connection`` import level so no real
 Postgres server is needed.
 """
 from __future__ import annotations
+
+# Canonical OTel reset fixtures from openframe-core v2.0.
+# Provides (autouse): reset_telemetry_state
+# Provides (on-demand): span_exporter, metric_reader
+from openframe.core.testing.fixtures import *  # noqa: F401, F403
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock
