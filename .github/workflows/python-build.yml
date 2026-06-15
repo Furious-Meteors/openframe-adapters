@@ -11,7 +11,6 @@ on:
         description: |
           Path to the package directory, e.g:
             packages/openframe-adapters-db-postgres
-            packages/openframe-adapters-db-mongo
             meta/openframe-adapters
         required: true
         type: string
@@ -29,48 +28,74 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0   # full history — required for reliable diff
 
       - name: Detect changed packages
         id: detect
         shell: bash
         run: |
+          set -euo pipefail
+
+          # ── Manual trigger ──────────────────────────────────────────────
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             INPUT="${{ inputs.package_path }}"
-            INPUT="${INPUT%/}"
+            INPUT="${INPUT%/}"   # strip trailing slash
+
             if [ ! -f "${INPUT}/pyproject.toml" ]; then
               echo "ERROR: ${INPUT}/pyproject.toml not found"
               exit 1
             fi
+
             PACKAGES=$(jq -nc --arg p "$INPUT" '[$p]')
+            echo "Manual trigger — package: ${INPUT}"
+
+          # ── Automatic push trigger ──────────────────────────────────────
           else
-            CHANGED=$(git diff --name-only HEAD~1 HEAD \
-              | grep -E '^(packages|meta)/' \
-              | awk -F/ '{print $1"/"$2}' \
-              | sort -u)
+            # Check whether a parent commit exists.
+            # On the very first push to a branch HEAD~1 does not exist.
+            if git rev-parse --verify HEAD~1 > /dev/null 2>&1; then
+              # Normal case — diff against parent commit
+              CHANGED=$(git diff --name-only HEAD~1 HEAD \
+                | grep -E '^(packages|meta)/' \
+                | awk -F/ '{print $1"/"$2}' \
+                | sort -u || true)
+              echo "Diff mode: HEAD~1..HEAD"
+            else
+              # First commit on this branch — treat all packages/ and meta/ as changed
+              echo "First commit detected — scanning all packages and meta dirs"
+              CHANGED=$(find packages meta -maxdepth 1 -mindepth 1 -type d 2>/dev/null \
+                | sort -u || true)
+            fi
 
             echo "Changed directories:"
-            echo "$CHANGED"
+            echo "${CHANGED:-<none>}"
 
+            # Filter to dirs that have a pyproject.toml
             VALID_JSON='[]'
             while IFS= read -r dir; do
               [ -z "$dir" ] && continue
               if [ -f "${dir}/pyproject.toml" ]; then
                 VALID_JSON=$(echo "$VALID_JSON" | jq --arg d "$dir" '. + [$d]')
+                echo "  ✓ ${dir}"
+              else
+                echo "  ✗ ${dir} (no pyproject.toml — skipping)"
               fi
             done <<< "$CHANGED"
 
             PACKAGES="$VALID_JSON"
           fi
 
+          # ── Output ───────────────────────────────────────────────────────
           echo "Packages to process: $PACKAGES"
           echo "packages=$PACKAGES" >> $GITHUB_OUTPUT
 
           COUNT=$(echo "$PACKAGES" | jq 'length')
           if [ "$COUNT" = "0" ]; then
             echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "No packages to process."
           else
             echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "Found ${COUNT} package(s) to process."
           fi
 
   # ── 2. Test each changed package ─────────────────────────────────────────
@@ -94,6 +119,7 @@ jobs:
         run: |
           if [ -d "${{ matrix.package }}/tests" ]; then
             echo "run_tests=true" >> $GITHUB_OUTPUT
+            echo "Found tests/ — will run test suite"
           else
             echo "run_tests=false" >> $GITHUB_OUTPUT
             echo "No tests/ directory — meta-package, skipping tests"
@@ -148,16 +174,14 @@ jobs:
       - name: Read package metadata
         id: pkg_meta
         working-directory: ${{ matrix.package }}
-        # Use the helper script — avoids shell/Python heredoc quoting issues
-        # with curly braces in authors = [{ name = "...", email = "..." }]
         run: |
           NAME=$(python3 "${{ github.workspace }}/scripts/read_pkg_meta.py" --field name)
           VERSION=$(python3 "${{ github.workspace }}/scripts/read_pkg_meta.py" --field version)
           SAFE=$(echo "$NAME" | tr '.' '-')
-          echo "name=$NAME"             >> $GITHUB_OUTPUT
-          echo "version=$VERSION"       >> $GITHUB_OUTPUT
-          echo "artifact_label=$SAFE"   >> $GITHUB_OUTPUT
-          echo "Building: $NAME==$VERSION from ${{ matrix.package }}"
+          echo "name=$NAME"           >> $GITHUB_OUTPUT
+          echo "version=$VERSION"     >> $GITHUB_OUTPUT
+          echo "artifact_label=$SAFE" >> $GITHUB_OUTPUT
+          echo "Building: $NAME==$VERSION"
 
       - name: Build wheel and sdist
         working-directory: ${{ matrix.package }}
@@ -190,7 +214,7 @@ jobs:
 
     environment:
       name: pypi
-      url: https://pypi.org/search/?q=openframe-adapters
+      url: https://pypi.org/search/?q=openframe
 
     permissions:
       id-token: write
@@ -259,8 +283,10 @@ jobs:
 
           echo "$PACKAGES" | jq -r '.[]' | while read pkg; do
             if [ -f "${pkg}/pyproject.toml" ]; then
-              NAME=$(python3 scripts/read_pkg_meta.py --field name 2>/dev/null || echo "$pkg")
-              VER=$(python3 scripts/read_pkg_meta.py --field version 2>/dev/null || echo "?")
+              cd "${pkg}"
+              NAME=$(python3 "${{ github.workspace }}/scripts/read_pkg_meta.py" --field name 2>/dev/null || echo "$pkg")
+              VER=$(python3 "${{ github.workspace }}/scripts/read_pkg_meta.py" --field version 2>/dev/null || echo "?")
+              cd "${{ github.workspace }}"
               echo "- \`${NAME}==${VER}\` — [pypi.org/project/${NAME}](https://pypi.org/project/${NAME}/)" >> $GITHUB_STEP_SUMMARY
             fi
           done
