@@ -85,6 +85,152 @@ without any conflicts.
 
 ---
 
+## Wiring adapters into your service
+
+Every adapter wires into your service through a single file — `deps.py` or
+`bootstrap/dependencies.py`. This file is the only place in your codebase
+that knows which adapter is active. Routes and services never import adapters
+directly.
+
+The rule is simple:
+
+> **One adapter** — wire directly with `lru_cache`.
+> **Two or more adapters** — use `PluginRegistry`.
+> The trigger to upgrade is adding a second adapter.
+
+### Stage 1 — One adapter
+
+Install one adapter and wire it directly. Four lines. No registry needed.
+
+```python
+# bootstrap/dependencies.py
+from functools import lru_cache
+from openframe.adapters.db.postgres import PostgresRepository, PostgresSettings
+from openframe.core.tracing import TracingProxy
+from src.adapters.item_repository import ItemPostgresRepository
+from src.application.services.item_service import ItemService
+
+@lru_cache(maxsize=1)
+def _get_repository() -> ItemPostgresRepository:
+    return ItemPostgresRepository(PostgresSettings())
+
+def get_item_service() -> ItemService:
+    return ItemService(TracingProxy(_get_repository(), prefix="repository.item"))
+```
+
+`PostgresSettings()` reads `DATABASE_URL` from env at startup.
+`lru_cache(maxsize=1)` constructs the repository once per process.
+`TracingProxy` wraps it for automatic OTel spans on every call.
+
+### Stage 2 — Two or more adapters
+
+When a second adapter is needed, replace `lru_cache` with `PluginRegistry`.
+The registry handles startup ordering, health aggregation, and graceful
+shutdown across all adapters.
+
+```python
+# bootstrap/dependencies.py
+from openframe.adapters.db.postgres import PostgresPlugin, PostgresSettings
+from openframe.adapters.db.redis import RedisPlugin, RedisSettings
+from openframe.core.plugins import PluginRegistry
+from openframe.core.tracing import TracingProxy
+from src.application.services.item_service import ItemService
+from src.application.services.session_service import SessionService
+
+_registry: PluginRegistry | None = None
+
+async def initialise() -> None:
+    global _registry
+    _registry = PluginRegistry()
+    _registry.register(PostgresPlugin(PostgresSettings()))  # capability: "persistence"
+    _registry.register(RedisPlugin(RedisSettings()))        # capability: "cache"
+    await _registry.initialize_all()   # fails fast if any backend unreachable
+
+async def shutdown() -> None:
+    if _registry:
+        await _registry.shutdown_all()  # never raises
+
+def get_item_service() -> ItemService:
+    repo = TracingProxy(
+        _registry.get("persistence").get_repository(),
+        prefix="repository.item",
+    )
+    return ItemService(repo)
+
+def get_session_service() -> SessionService:
+    cache = TracingProxy(
+        _registry.get("cache").get_repository(),
+        prefix="cache.session",
+    )
+    return SessionService(cache)
+```
+
+Wire `initialise()` and `shutdown()` in your FastAPI lifespan:
+
+```python
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from openframe.core.middleware import TelemetryMiddleware
+from openframe.core.telemetry import setup_telemetry
+from src.bootstrap import dependencies
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    setup_telemetry()
+    await dependencies.initialise()
+    yield
+    await dependencies.shutdown()
+
+app = FastAPI(lifespan=lifespan)
+app.add_middleware(TelemetryMiddleware)
+```
+
+### Plugin capabilities
+
+Every `*Plugin` class declares a `capability` string. This is the key used
+by `registry.get()`. The capability taxonomy is a convention across the entire
+OpenFrame ecosystem — use these exact strings:
+
+| Capability | Adapters | Use for |
+|---|---|---|
+| `"persistence"` | Postgres, Mongo, MySQL, DynamoDB, Cassandra | Primary data store |
+| `"cache"` | Redis | Fast ephemeral store, sessions, rate limits |
+| `"queue"` | Kafka, NATS, RabbitMQ | Message publishing and consumption |
+| `"vector"` | Milvus, Qdrant, ChromaDB, FAISS, FalkorDB | Vector similarity search |
+| `"timeseries"` | InfluxDB | Time-series metrics and events |
+
+Using a different string for the same category breaks `registry.get()` across
+services. Always use the strings from this table.
+
+### The env-var swap exception
+
+Switching between adapters via an environment variable (`PERSISTENCE_BACKEND=postgres`
+vs `PERSISTENCE_BACKEND=mongo`) is still Stage 1 — because only one adapter
+is active at any moment. Use `lru_cache` direct wiring with a conditional:
+
+```python
+@lru_cache(maxsize=1)
+def _get_repository():
+    backend = os.environ.get("PERSISTENCE_BACKEND", "postgres")
+    if backend == "postgres":
+        return ItemPostgresRepository(PostgresSettings())
+    elif backend == "mongo":
+        return ItemMongoRepository(MongoSettings())
+    raise ValueError(f"Unknown PERSISTENCE_BACKEND: {backend!r}")
+```
+
+`PluginRegistry` is for services that need multiple adapters simultaneously,
+not for services that swap between adapters via configuration.
+
+### Full wiring reference
+
+For the complete guide — upgrade path from Stage 1 to Stage 2, lifespan
+wiring, and architecture diagrams — see the
+[Composition Root](https://furious-meteors.github.io/openframe-core/developer-guide/composition-root/)
+page in the `openframe-core` documentation.
+
+---
+
 ## Package inventory
 
 | Extra | `pip install` | Package installed | Async driver |

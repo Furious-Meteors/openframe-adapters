@@ -22,6 +22,9 @@ Usage via deps.py (unchanged, no plugin needed)::
     repo = PostgresRepository(PostgresSettings())
     traced = TracingProxy(repo, prefix="repository.item")
 """
+# Capability: "persistence"
+# See capability taxonomy:
+# https://furious-meteors.github.io/openframe-core/developer-guide/composition-root/
 from __future__ import annotations
 
 import logging

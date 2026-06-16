@@ -30,6 +30,9 @@ Usage via deps.py (unchanged, no plugin needed)::
     producer = KafkaProducer(KafkaSettings())
     await producer.start()
 """
+# Capability: "queue"
+# See capability taxonomy:
+# https://furious-meteors.github.io/openframe-core/developer-guide/composition-root/
 from __future__ import annotations
 
 import logging
