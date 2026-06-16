@@ -1,0 +1,58 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "openframe-adapters-db-redis"
+version = "1.1.0"
+description = "OpenFrame Microservice Suite - Redis key-value adapter."
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+keywords = ["openframe", "redis", "cache", "hexagonal", "microservice"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Database",
+    "Typing :: Typed",
+]
+dependencies = [
+    "openframe-core>=2.0,<3",
+    "redis[asyncio]>=5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "pytest-mock>=3.14",
+]
+
+[[project.authors]]
+name = "Furious Meteors Engineering"
+email = "engineering@furiousmeteors.dev"
+
+[[project.maintainers]]
+name = "Furious Meteors Engineering"
+email = "engineering@furiousmeteors.dev"
+
+[project.urls]
+Homepage      = "https://github.com/Furious-Meteors/openframe-adapters"
+Documentation = "https://furious-meteors.github.io/openframe-adapters/"
+Repository    = "https://github.com/Furious-Meteors/openframe-adapters"
+Changelog     = "https://github.com/Furious-Meteors/openframe-adapters/blob/production/.github/CHANGELOG.md"
+"Bug Tracker" = "https://github.com/Furious-Meteors/openframe-adapters/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["openframe"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
