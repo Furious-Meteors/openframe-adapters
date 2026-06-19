@@ -134,7 +134,6 @@ jobs:
     needs: detect
     if: needs.detect.outputs.has_changes == 'true'
     runs-on: ubuntu-latest
-    fail-fast: false
 
     strategy:
       fail-fast: false
