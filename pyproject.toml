@@ -1,0 +1,29 @@
+[tool.pytest.ini_options]
+# When pytest is invoked from the repo root (e.g. `pytest packages/`) the
+# per-package pyproject.toml files are not used as the active config — only
+# this file is. Three settings are required for a correct monorepo run:
+#
+#   asyncio_mode = "auto"  — matches the setting in every per-package
+#                            pyproject.toml so async tests run without
+#                            explicit @pytest.mark.asyncio markers.
+#
+#   addopts --import-mode=importlib — prevents "import file mismatch" errors
+#                            when multiple packages share identically-named
+#                            test files (test_plugin.py, conftest.py, etc.).
+#                            importlib mode imports each file by its unique
+#                            filesystem path rather than its module name.
+#
+#   pythonpath — lists each package source root so local edits shadow the
+#                            installed (site-packages) versions. All packages
+#                            share the `openframe` namespace package; Python
+#                            merges them correctly when each source root is
+#                            on sys.path.
+asyncio_mode = "auto"
+addopts      = "--import-mode=importlib"
+testpaths    = ["packages"]
+pythonpath   = [
+    "packages/openframe-adapters-db-mongo",
+    "packages/openframe-adapters-db-postgres",
+    "packages/openframe-adapters-db-redis",
+    "packages/openframe-adapters-queue-kafka",
+]
