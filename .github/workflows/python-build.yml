@@ -7,14 +7,19 @@ on:
 
   workflow_dispatch:
     inputs:
+      rebuild_all:
+        description: "Rebuild every package under packages/ and meta/ (ignores package_path)"
+        required: false
+        default: false
+        type: boolean
       package_path:
         description: |
-          One or more package directories, one per line, e.g.:
+          One or more package directories, one per line (ignored when rebuild_all is checked):
             packages/openframe-adapters-db-mongo
             packages/openframe-adapters-db-postgres
             packages/openframe-adapters-queue-kafka
             meta/openframe-adapters
-        required: true
+        required: false
         type: string
 
 jobs:
@@ -54,16 +59,32 @@ jobs:
             fi
           }
 
-          # ── Manual trigger — one package path per line ───────────────────
+          # ── Manual trigger ────────────────────────────────────────────────
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "Manual trigger — parsing package_path input (one per line):"
-            while IFS= read -r line; do
-              # strip leading/trailing whitespace
-              line="${line#"${line%%[![:space:]]*}"}"
-              line="${line%"${line##*[![:space:]]}"}"
-              [ -z "$line" ] && continue
-              add_if_valid "$line"
-            done <<< "${{ inputs.package_path }}"
+
+            if [ "${{ inputs.rebuild_all }}" = "true" ]; then
+              # rebuild_all: discover every package in packages/ and meta/
+              echo "rebuild_all=true — scanning all packages/ and meta/ dirs:"
+              while IFS= read -r dir; do
+                add_if_valid "$dir"
+              done < <(find packages meta -maxdepth 1 -mindepth 1 -type d \
+                2>/dev/null | sort -u)
+
+            else
+              # specific packages: one path per line
+              echo "Manual trigger — parsing package_path input (one per line):"
+              if [ -z "${{ inputs.package_path }}" ]; then
+                echo "ERROR: package_path is empty and rebuild_all is false."
+                exit 1
+              fi
+              while IFS= read -r line; do
+                # strip leading/trailing whitespace
+                line="${line#"${line%%[![:space:]]*}"}"
+                line="${line%"${line##*[![:space:]]}"}"
+                [ -z "$line" ] && continue
+                add_if_valid "$line"
+              done <<< "${{ inputs.package_path }}"
+            fi
 
           # ── Automatic push trigger ────────────────────────────────────────
           else
