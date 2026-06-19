@@ -63,7 +63,6 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
 
             if [ "${{ inputs.rebuild_all }}" = "true" ]; then
-              # rebuild_all: discover every package in packages/ and meta/
               echo "rebuild_all=true — scanning all packages/ and meta/ dirs:"
               while IFS= read -r dir; do
                 add_if_valid "$dir"
@@ -71,14 +70,12 @@ jobs:
                 2>/dev/null | sort -u)
 
             else
-              # specific packages: one path per line
               echo "Manual trigger — parsing package_path input (one per line):"
               if [ -z "${{ inputs.package_path }}" ]; then
                 echo "ERROR: package_path is empty and rebuild_all is false."
                 exit 1
               fi
               while IFS= read -r line; do
-                # strip leading/trailing whitespace
                 line="${line#"${line%%[![:space:]]*}"}"
                 line="${line%"${line##*[![:space:]]}"}"
                 [ -z "$line" ] && continue
@@ -88,9 +85,7 @@ jobs:
 
           # ── Automatic push trigger ────────────────────────────────────────
           else
-            # Diff the full push range (before..after) so every commit in the
-            # push is covered — not just the last one (HEAD~1..HEAD). Falls
-            # back to a full scan on the first-ever commit.
+            # Diff the full push range so every commit in the push is covered.
             BEFORE="${{ github.event.before }}"
             AFTER="${{ github.event.after }}"
 
@@ -115,7 +110,6 @@ jobs:
             done <<< "$CHANGED"
           fi
 
-          # ── Write outputs ─────────────────────────────────────────────────
           echo "Final packages JSON: $VALID_JSON"
           echo "packages=$VALID_JSON" >> "$GITHUB_OUTPUT"
 
@@ -130,114 +124,17 @@ jobs:
             echo "Found $COUNT package(s) — downstream jobs will run."
           fi
 
-  # ── 2. Test each changed package ─────────────────────────────────────────
-  test:
-    name: Test ${{ matrix.package }}
+  # ── 2. Test → Build → Publish (one job per package, fully independent) ───
+  #
+  # Combining all three phases into a single matrix job means one package's
+  # test failure cannot block another package's build or publish. Each
+  # package succeeds or fails on its own.
+  release:
+    name: Release ${{ matrix.package }}
     needs: detect
     if: needs.detect.outputs.has_changes == 'true'
     runs-on: ubuntu-latest
-
-    strategy:
-      fail-fast: false
-      matrix:
-        package: ${{ fromJson(needs.detect.outputs.packages) }}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Check if package has tests
-        id: has_tests
-        run: |
-          if [ -d "${{ matrix.package }}/tests" ]; then
-            echo "run_tests=true" >> "$GITHUB_OUTPUT"
-            echo "Found tests/ — will run test suite"
-          else
-            echo "run_tests=false" >> "$GITHUB_OUTPUT"
-            echo "No tests/ — meta-package, skipping tests"
-          fi
-
-      - name: Setup Python
-        if: steps.has_tests.outputs.run_tests == 'true'
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: pip
-
-      - name: Install package and dev dependencies
-        if: steps.has_tests.outputs.run_tests == 'true'
-        working-directory: ${{ matrix.package }}
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
-
-      - name: Run test suite
-        if: steps.has_tests.outputs.run_tests == 'true'
-        working-directory: ${{ matrix.package }}
-        run: pytest tests/ -v --tb=short
-
-  # ── 3. Build each changed package ────────────────────────────────────────
-  build:
-    name: Build ${{ matrix.package }}
-    needs: [detect, test]
-    if: needs.detect.outputs.has_changes == 'true'
-    runs-on: ubuntu-latest
-
-    strategy:
-      fail-fast: false
-      matrix:
-        package: ${{ fromJson(needs.detect.outputs.packages) }}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: pip
-
-      - name: Install build tools
-        run: |
-          python -m pip install --upgrade pip
-          pip install build
-
-      - name: Read package metadata
-        id: pkg_meta
-        working-directory: ${{ matrix.package }}
-        run: |
-          NAME=$(python3 "${{ github.workspace }}/scripts/read_pkg_meta.py" --field name)
-          VERSION=$(python3 "${{ github.workspace }}/scripts/read_pkg_meta.py" --field version)
-          SAFE=$(echo "$NAME" | tr '.' '-')
-          echo "name=$NAME"             >> "$GITHUB_OUTPUT"
-          echo "version=$VERSION"       >> "$GITHUB_OUTPUT"
-          echo "artifact_label=$SAFE"   >> "$GITHUB_OUTPUT"
-          echo "Building: $NAME==$VERSION from ${{ matrix.package }}"
-
-      - name: Build wheel and sdist
-        working-directory: ${{ matrix.package }}
-        run: python -m build
-
-      - name: Show built artifacts
-        working-directory: ${{ matrix.package }}
-        run: ls -lh dist/
-
-      - name: Upload distribution artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist-${{ steps.pkg_meta.outputs.artifact_label }}
-          path: ${{ matrix.package }}/dist/
-          retention-days: 7
-
-  # ── 4. Publish each changed package to PyPI ──────────────────────────────
-  publish:
-    name: Publish ${{ matrix.package }}
-    needs: [detect, build]
-    if: |
-      needs.detect.outputs.has_changes == 'true' &&
-      github.ref == 'refs/heads/production'
-    runs-on: ubuntu-latest
+    fail-fast: false
 
     strategy:
       fail-fast: false
@@ -259,36 +156,76 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: pip
 
-      - name: Read artifact label
+      # ── Test (skipped for meta-packages with no tests/ dir) ──────────────
+      - name: Check for tests
+        id: has_tests
+        run: |
+          if [ -d "${{ matrix.package }}/tests" ]; then
+            echo "run_tests=true"  >> "$GITHUB_OUTPUT"
+          else
+            echo "run_tests=false" >> "$GITHUB_OUTPUT"
+            echo "No tests/ directory — skipping test phase."
+          fi
+
+      - name: Install package + dev dependencies
+        if: steps.has_tests.outputs.run_tests == 'true'
+        working-directory: ${{ matrix.package }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run test suite
+        if: steps.has_tests.outputs.run_tests == 'true'
+        working-directory: ${{ matrix.package }}
+        run: python -m pytest tests/ -v --tb=short
+
+      # ── Build ─────────────────────────────────────────────────────────────
+      - name: Install build tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install build
+
+      - name: Read package metadata
         id: pkg_meta
         working-directory: ${{ matrix.package }}
         run: |
           NAME=$(python3 "${{ github.workspace }}/scripts/read_pkg_meta.py" --field name)
+          VERSION=$(python3 "${{ github.workspace }}/scripts/read_pkg_meta.py" --field version)
           SAFE=$(echo "$NAME" | tr '.' '-')
-          echo "artifact_label=$SAFE" >> "$GITHUB_OUTPUT"
           echo "name=$NAME"           >> "$GITHUB_OUTPUT"
-          echo "Publishing: $NAME"
+          echo "version=$VERSION"     >> "$GITHUB_OUTPUT"
+          echo "artifact_label=$SAFE" >> "$GITHUB_OUTPUT"
+          echo "Building: $NAME==$VERSION"
 
-      - name: Download distribution artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: dist-${{ steps.pkg_meta.outputs.artifact_label }}
-          path: dist/
+      - name: Build wheel and sdist
+        working-directory: ${{ matrix.package }}
+        run: python -m build
 
-      - name: Show artifacts to be published
+      - name: Show built artifacts
+        working-directory: ${{ matrix.package }}
         run: ls -lh dist/
 
+      - name: Upload distribution artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ steps.pkg_meta.outputs.artifact_label }}
+          path: ${{ matrix.package }}/dist/
+          retention-days: 7
+
+      # ── Publish (production branch only) ─────────────────────────────────
       - name: Publish to PyPI
+        if: github.ref == 'refs/heads/production'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          password: ${{ secrets.PYPI_API_TOKEN }}
-          skip_existing: true
+          packages-dir: ${{ matrix.package }}/dist/
+          skip-existing: true
 
-  # ── 5. Pipeline summary ───────────────────────────────────────────────────
+  # ── 3. Pipeline summary ───────────────────────────────────────────────────
   summary:
     name: Summary
-    needs: [detect, test, build, publish]
+    needs: [detect, release]
     if: always()
     runs-on: ubuntu-latest
 
@@ -329,9 +266,7 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "### Job results" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Job | Result |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|-----|--------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Job    | Result |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|--------|--------|" >> "$GITHUB_STEP_SUMMARY"
           echo "| Detect  | ${{ needs.detect.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Test    | ${{ needs.test.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Build   | ${{ needs.build.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Publish | ${{ needs.publish.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Release | ${{ needs.release.result }} |" >> "$GITHUB_STEP_SUMMARY"

@@ -22,6 +22,8 @@ jobs:
         package:
           - openframe-adapters-db-postgres
           - openframe-adapters-db-mongo
+          - openframe-adapters-db-redis
+          - openframe-adapters-queue-kafka
 
     defaults:
       run:
