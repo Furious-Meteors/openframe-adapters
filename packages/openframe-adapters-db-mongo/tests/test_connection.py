@@ -91,6 +91,7 @@ class TestGetMongoClient:
         assert exc_info.value.operation == "init"
 
     def test_client_passes_correct_kwargs(self, settings: MongoSettings) -> None:
+        """Base kwargs are always present; tlsAllowInvalidCertificates only when tls=True."""
         fake_client = MagicMock()
         with patch(
             "openframe.adapters.db.mongo.connection.AsyncIOMotorClient",
@@ -103,4 +104,25 @@ class TestGetMongoClient:
         assert kwargs["minPoolSize"] == settings.mongo_min_pool_size
         assert kwargs["maxPoolSize"] == settings.mongo_max_pool_size
         assert kwargs["tls"] == settings.mongo_tls
-        assert kwargs["tlsAllowInvalidCertificates"] == settings.mongo_tls_allow_invalid_certs
+        # tlsAllowInvalidCertificates is only forwarded when TLS is enabled —
+        # the default settings fixture has mongo_tls=False so it must be absent.
+        assert "tlsAllowInvalidCertificates" not in kwargs
+
+    def test_client_passes_tls_kwargs_when_tls_enabled(self) -> None:
+        """When mongo_tls=True, tlsAllowInvalidCertificates is forwarded."""
+        tls_settings = MongoSettings(
+            mongo_url="mongodb://u:p@localhost:27017",
+            mongo_database="db",
+            mongo_tls=True,
+            mongo_tls_allow_invalid_certs=True,
+        )
+        fake_client = MagicMock()
+        with patch(
+            "openframe.adapters.db.mongo.connection.AsyncIOMotorClient",
+            return_value=fake_client,
+        ) as mock_cls:
+            get_mongo_client(tls_settings)
+
+        _, kwargs = mock_cls.call_args
+        assert kwargs["tls"] is True
+        assert kwargs["tlsAllowInvalidCertificates"] is True
