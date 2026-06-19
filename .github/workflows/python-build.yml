@@ -26,9 +26,6 @@ jobs:
       name: pypi
       url: https://pypi.org/search/?q=openframe
 
-    permissions:
-      id-token: write
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -65,4 +62,5 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: ${{ matrix.package }}/dist/
+          password: ${{ secrets.PYPI_API_TOKEN }}
           skip-existing: true
