@@ -57,14 +57,15 @@ def get_mongo_client(settings: MongoSettings) -> AsyncIOMotorClient:  # type: ig
         return _client_cache[url]
 
     try:
-        client: AsyncIOMotorClient = AsyncIOMotorClient(  # type: ignore[assignment]
-            url,
-            serverSelectionTimeoutMS=settings.mongo_server_selection_timeout_ms,
-            minPoolSize=settings.mongo_min_pool_size,
-            maxPoolSize=settings.mongo_max_pool_size,
-            tls=settings.mongo_tls,
-            tlsAllowInvalidCertificates=settings.mongo_tls_allow_invalid_certs,
-        )
+        kwargs: dict = {
+            "serverSelectionTimeoutMS": settings.mongo_server_selection_timeout_ms,
+            "minPoolSize": settings.mongo_min_pool_size,
+            "maxPoolSize": settings.mongo_max_pool_size,
+            "tls": settings.mongo_tls,
+        }
+        if settings.mongo_tls:
+            kwargs["tlsAllowInvalidCertificates"] = settings.mongo_tls_allow_invalid_certs
+        client: AsyncIOMotorClient = AsyncIOMotorClient(url, **kwargs)  # type: ignore[assignment]
     except pymongo.errors.ConfigurationError as exc:
         raise AdapterConfigurationError(
             f"MONGO_URL is invalid or unsupported: {url!r} — {exc}",

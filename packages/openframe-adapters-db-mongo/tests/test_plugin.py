@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from openframe.adapters.db.mongo import MongoPlugin, MongoSettings
+from openframe.adapters.db.mongo import MongoPlugin, MongoRepository, MongoSettings
 from openframe.core.plugins import OpenFramePlugin, PluginContext, PluginStatus
 
 
@@ -47,7 +47,7 @@ def test_mongo_plugin_name(plugin):
 
 
 def test_mongo_plugin_version(plugin):
-    assert plugin.version == "1.1.0"
+    assert plugin.version == "1.2.0"
 
 
 def test_mongo_plugin_capability(plugin):
@@ -178,4 +178,69 @@ async def test_health_returns_failed_when_ping_raises(
     result = await plugin.health()
     assert result is not None
     assert result.status == PluginStatus.FAILED
+    conn_module._client_cache.clear()
+
+
+# ── repository_class parameter ─────────────────────────────────────────────
+
+def test_plugin_defaults_to_base_repository_class(settings):
+    """Backwards compatibility — no repository_class passed."""
+    plugin = MongoPlugin(settings, collection="x")
+    assert plugin._repository_class is MongoRepository
+
+
+def test_plugin_accepts_custom_repository_class(settings):
+    class CustomRepo(MongoRepository):
+        pass
+
+    plugin = MongoPlugin(settings, collection="x", repository_class=CustomRepo)
+    assert plugin._repository_class is CustomRepo
+
+
+def test_plugin_rejects_non_repository_class(settings):
+    """repository_class must be a subclass of MongoRepository — TypeError if not."""
+    with pytest.raises(TypeError, match="subclass of MongoRepository"):
+        MongoPlugin(settings, collection="x", repository_class=object)  # type: ignore[arg-type]
+
+
+async def test_initialize_constructs_custom_repository_class(
+    settings, plugin_context, mock_client, mock_settings
+):
+    """
+    REGRESSION: plugin always constructed the base class, silently discarding
+    domain subclass overrides of _doc_to_entity()/_entity_to_doc().
+    """
+    import openframe.adapters.db.mongo.connection as conn_module
+
+    class CustomRepo(MongoRepository):
+        marker = True
+
+    conn_module._client_cache[mock_settings.mongo_url] = mock_client
+    mock_client.admin.command.return_value = {"ok": 1}
+
+    plugin = MongoPlugin(mock_settings, collection="x", repository_class=CustomRepo)
+    await plugin.initialize(plugin_context)
+
+    repo = plugin.get_repository()
+    assert isinstance(repo, CustomRepo)
+    assert hasattr(repo, "marker")
+    conn_module._client_cache.clear()
+
+
+async def test_get_repository_returns_subclass_not_base_class(
+    settings, plugin_context, mock_client, mock_settings
+):
+    """type(repo) must be the subclass, not just isinstance-compatible."""
+    import openframe.adapters.db.mongo.connection as conn_module
+
+    class CustomRepo(MongoRepository):
+        pass
+
+    conn_module._client_cache[mock_settings.mongo_url] = mock_client
+    mock_client.admin.command.return_value = {"ok": 1}
+
+    plugin = MongoPlugin(mock_settings, collection="x", repository_class=CustomRepo)
+    await plugin.initialize(plugin_context)
+
+    assert type(plugin.get_repository()) is CustomRepo
     conn_module._client_cache.clear()

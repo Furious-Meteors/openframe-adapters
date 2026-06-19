@@ -44,7 +44,7 @@ def test_kafka_plugin_name(plugin: KafkaPlugin) -> None:
 
 
 def test_kafka_plugin_version(plugin: KafkaPlugin) -> None:
-    assert plugin.version == "1.1.0"
+    assert plugin.version == "1.2.0"
 
 
 def test_kafka_plugin_capability(plugin: KafkaPlugin) -> None:
@@ -166,3 +166,68 @@ async def test_health_returns_ready_after_initialize(
 
     health = await plugin.health()
     assert health.status == PluginStatus.READY
+
+
+# ── producer_class parameter ───────────────────────────────────────────────
+
+def test_plugin_defaults_to_base_producer_class(settings: KafkaSettings) -> None:
+    """Backwards compatibility — no producer_class passed."""
+    plugin = KafkaPlugin(settings)
+    assert plugin._producer_class is KafkaProducer
+
+
+def test_plugin_accepts_custom_producer_class(settings: KafkaSettings) -> None:
+    class CustomProducer(KafkaProducer):
+        pass
+
+    plugin = KafkaPlugin(settings, producer_class=CustomProducer)
+    assert plugin._producer_class is CustomProducer
+
+
+def test_plugin_rejects_non_producer_class(settings: KafkaSettings) -> None:
+    """producer_class must be a subclass of KafkaProducer — TypeError if not."""
+    with pytest.raises(TypeError, match="subclass of KafkaProducer"):
+        KafkaPlugin(settings, producer_class=object)  # type: ignore[arg-type]
+
+
+async def test_initialize_constructs_custom_producer_class(
+    settings: KafkaSettings,
+    plugin_context: PluginContext,
+    mock_producer_client: MagicMock,
+) -> None:
+    """
+    REGRESSION: plugin always constructed the base class, silently discarding
+    domain subclass overrides of _serialise().
+    """
+    class CustomProducer(KafkaProducer):
+        marker = True
+
+    plugin = KafkaPlugin(settings, producer_class=CustomProducer)
+    with patch(
+        "openframe.adapters.queue.kafka.producer.AIOKafkaProducer",
+        return_value=mock_producer_client,
+    ):
+        await plugin.initialize(plugin_context)
+
+    producer = plugin.get_producer()
+    assert isinstance(producer, CustomProducer)
+    assert hasattr(producer, "marker")
+
+
+async def test_get_producer_returns_subclass_not_base_class(
+    settings: KafkaSettings,
+    plugin_context: PluginContext,
+    mock_producer_client: MagicMock,
+) -> None:
+    """type(producer) must be the subclass, not just isinstance-compatible."""
+    class CustomProducer(KafkaProducer):
+        pass
+
+    plugin = KafkaPlugin(settings, producer_class=CustomProducer)
+    with patch(
+        "openframe.adapters.queue.kafka.producer.AIOKafkaProducer",
+        return_value=mock_producer_client,
+    ):
+        await plugin.initialize(plugin_context)
+
+    assert type(plugin.get_producer()) is CustomProducer

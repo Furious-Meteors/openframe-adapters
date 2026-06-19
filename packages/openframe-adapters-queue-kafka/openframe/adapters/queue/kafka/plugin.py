@@ -54,6 +54,8 @@ class KafkaPlugin:
 
     Capability: "queue"
 
+    Stability: beta
+
     Lifecycle:
         initialize() — starts the ``KafkaProducer`` and verifies connectivity.
                        Raises on failure.
@@ -62,14 +64,47 @@ class KafkaPlugin:
 
     The plugin exposes ``get_producer()`` and ``make_consumer()`` after
     initialization for use in the composition root or ApplicationBootstrap.
+
+    By default constructs a plain KafkaProducer. To use a domain-specific
+    subclass (e.g. one that overrides _serialise), pass it via producer_class::
+
+        registry.register(KafkaPlugin(
+            KafkaSettings(),
+            producer_class=ArtifactEventProducer,
+        ))
+
+    Note: ``make_consumer()`` always constructs a base ``KafkaConsumer``.
+    Consumer subclass support is a follow-up — applications that need a
+    domain-specific consumer should construct it directly.
     """
 
     name:       str = "openframe-kafka"
-    version:    str = "1.1.0"
+    version:    str = "1.2.0"
     capability: str = "queue"
 
-    def __init__(self, settings: KafkaSettings) -> None:
+    def __init__(
+        self,
+        settings: KafkaSettings,
+        producer_class: type[KafkaProducer] = KafkaProducer,
+    ) -> None:
+        """
+        Args:
+            settings:       KafkaSettings instance.
+            producer_class: The KafkaProducer subclass to construct.
+                            Defaults to the base KafkaProducer. Pass a
+                            domain-specific subclass here to get proper
+                            _serialise() overrides through get_producer().
+
+        Raises:
+            TypeError: producer_class is not a subclass of KafkaProducer.
+        """
+        if not (isinstance(producer_class, type) and issubclass(producer_class, KafkaProducer)):
+            raise TypeError(
+                f"producer_class must be a subclass of KafkaProducer, "
+                f"got {producer_class!r}"
+            )
         self._settings = settings
+        self._producer_class = producer_class
         self._producer: KafkaProducer | None = None
         self._status = PluginStatus.REGISTERED
 
@@ -88,12 +123,13 @@ class KafkaPlugin:
         """
         self._status = PluginStatus.INITIALIZED
         try:
-            self._producer = KafkaProducer(self._settings)
+            self._producer = self._producer_class(self._settings)
             await self._producer.start()
             self._status = PluginStatus.READY
             _logger.info(
-                "KafkaPlugin initialized — %s",
+                "KafkaPlugin initialized — %s (producer_class=%s)",
                 self._settings.kafka_bootstrap_servers,
+                self._producer_class.__name__,
             )
         except Exception:
             self._status = PluginStatus.FAILED

@@ -47,6 +47,8 @@ class PostgresPlugin:
 
     Capability: "persistence"
 
+    Stability: beta
+
     Lifecycle:
         initialize() — creates the asyncpg connection pool and verifies
                        connectivity via ping(). Raises AdapterConnectionError
@@ -56,10 +58,20 @@ class PostgresPlugin:
 
     The plugin exposes get_repository() after initialization for use
     in the composition root or ApplicationBootstrap.
+
+    By default constructs a plain PostgresRepository. To use a domain-specific
+    subclass, pass it via repository_class::
+
+        registry.register(PostgresPlugin(
+            PostgresSettings(),
+            table="items",
+            id_column="id",
+            repository_class=ItemPostgresRepository,
+        ))
     """
 
     name:       str = "openframe-postgres"
-    version:    str = "1.1.0"
+    version:    str = "1.2.0"
     capability: str = "persistence"
 
     def __init__(
@@ -67,10 +79,31 @@ class PostgresPlugin:
         settings: PostgresSettings,
         table: str = "",
         id_column: str = "id",
+        repository_class: type[PostgresRepository] = PostgresRepository,
     ) -> None:
+        """
+        Args:
+            settings:         PostgresSettings instance.
+            table:            Table name. If omitted the plugin acts as a
+                              connection manager only (no get_repository()).
+            id_column:        Primary key column name. Defaults to "id".
+            repository_class: The PostgresRepository subclass to construct.
+                              Defaults to the base PostgresRepository. Pass a
+                              domain-specific subclass here to get proper
+                              entity mapping through get_repository().
+
+        Raises:
+            TypeError: repository_class is not a subclass of PostgresRepository.
+        """
+        if not (isinstance(repository_class, type) and issubclass(repository_class, PostgresRepository)):
+            raise TypeError(
+                f"repository_class must be a subclass of PostgresRepository, "
+                f"got {repository_class!r}"
+            )
         self._settings = settings
         self._table = table
         self._id_column = id_column
+        self._repository_class = repository_class
         self._repo: PostgresRepository | None = None
         self._status = PluginStatus.REGISTERED
 
@@ -97,7 +130,7 @@ class PostgresPlugin:
         try:
             pool = await get_postgres_pool(self._settings)
             if self._table:
-                self._repo = PostgresRepository(
+                self._repo = self._repository_class(
                     self._settings,
                     table=self._table,
                     id_column=self._id_column,
@@ -120,8 +153,9 @@ class PostgresPlugin:
                     ) from exc
             self._status = PluginStatus.READY
             _logger.info(
-                "PostgresPlugin initialized — %s",
+                "PostgresPlugin initialized — %s (repository_class=%s)",
                 self._settings.database_url.split("@")[-1],
+                self._repository_class.__name__,
             )
         except Exception:
             self._status = PluginStatus.FAILED

@@ -47,6 +47,8 @@ class MongoPlugin:
 
     Capability: "persistence"
 
+    Stability: beta
+
     Lifecycle:
         initialize() — creates the Motor client (lazy) and verifies
                        connectivity via ping(). Raises AdapterConnectionError
@@ -56,19 +58,51 @@ class MongoPlugin:
 
     The plugin exposes get_repository() after initialization for use
     in the composition root or ApplicationBootstrap.
+
+    By default constructs a plain MongoRepository. To use a domain-specific
+    subclass (e.g. one that overrides _doc_to_entity/_entity_to_doc), pass
+    it via repository_class::
+
+        registry.register(MongoPlugin(
+            MongoSettings(),
+            collection="artifacts",
+            repository_class=ArtifactMongoRepository,
+        ))
+        # registry.get("persistence").get_repository() now returns
+        # an ArtifactMongoRepository instance, not a plain MongoRepository.
     """
 
     name:       str = "openframe-mongo"
-    version:    str = "1.1.0"
+    version:    str = "1.2.0"
     capability: str = "persistence"
 
     def __init__(
         self,
         settings: MongoSettings,
         collection: str = "documents",
+        repository_class: type[MongoRepository] = MongoRepository,
     ) -> None:
+        """
+        Args:
+            settings:         MongoSettings instance.
+            collection:       MongoDB collection name.
+            repository_class: The MongoRepository subclass to construct.
+                              Defaults to the base MongoRepository. Pass a
+                              domain-specific subclass here to get proper
+                              _doc_to_entity()/_entity_to_doc() mapping
+                              through get_repository().
+
+        Raises:
+            TypeError: repository_class is not a subclass of MongoRepository.
+        """
+        if not (isinstance(repository_class, type) and issubclass(repository_class, MongoRepository)):
+            raise TypeError(
+                f"repository_class must be a subclass of MongoRepository, "
+                f"got {repository_class!r}"
+            )
         self._settings = settings
         self._collection = collection
+        self._repository_class = repository_class
         self._repo: MongoRepository | None = None
         self._status = PluginStatus.REGISTERED
 
@@ -87,7 +121,7 @@ class MongoPlugin:
         self._status = PluginStatus.INITIALIZED
         try:
             get_mongo_client(self._settings)
-            self._repo = MongoRepository(self._settings, collection=self._collection)
+            self._repo = self._repository_class(self._settings, collection=self._collection)
             if not await self._repo.ping():
                 raise AdapterConnectionError(
                     "MongoDB ping failed after client creation",
@@ -96,9 +130,10 @@ class MongoPlugin:
                 )
             self._status = PluginStatus.READY
             _logger.info(
-                "MongoPlugin initialized — %s/%s",
+                "MongoPlugin initialized — %s/%s (repository_class=%s)",
                 self._settings.mongo_url.split("@")[-1],
                 self._settings.mongo_database,
+                self._repository_class.__name__,
             )
         except Exception:
             self._status = PluginStatus.FAILED

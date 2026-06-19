@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from openframe.adapters.db.postgres import PostgresPlugin, PostgresSettings
+from openframe.adapters.db.postgres import PostgresPlugin, PostgresRepository, PostgresSettings
 from openframe.core.plugins import OpenFramePlugin, PluginContext, PluginStatus
 
 
@@ -46,7 +46,7 @@ def test_postgres_plugin_name(plugin):
 
 
 def test_postgres_plugin_version(plugin):
-    assert plugin.version == "1.1.0"
+    assert plugin.version == "1.2.0"
 
 
 def test_postgres_plugin_capability(plugin):
@@ -176,4 +176,69 @@ async def test_health_returns_failed_when_ping_fails(
     result = await plugin.health()
     assert result is not None
     assert result.status == PluginStatus.FAILED
+    conn_module._pool_cache.clear()
+
+
+# ── repository_class parameter ─────────────────────────────────────────────
+
+def test_plugin_defaults_to_base_repository_class(settings):
+    """Backwards compatibility — no repository_class passed."""
+    plugin = PostgresPlugin(settings, table="items")
+    assert plugin._repository_class is PostgresRepository
+
+
+def test_plugin_accepts_custom_repository_class(settings):
+    class CustomRepo(PostgresRepository):
+        pass
+
+    plugin = PostgresPlugin(settings, table="items", repository_class=CustomRepo)
+    assert plugin._repository_class is CustomRepo
+
+
+def test_plugin_rejects_non_repository_class(settings):
+    """repository_class must be a subclass of PostgresRepository — TypeError if not."""
+    with pytest.raises(TypeError, match="subclass of PostgresRepository"):
+        PostgresPlugin(settings, table="items", repository_class=object)  # type: ignore[arg-type]
+
+
+async def test_initialize_constructs_custom_repository_class(
+    settings, plugin_context, mock_pool, mock_settings
+):
+    """
+    REGRESSION: plugin always constructed the base class, silently discarding
+    domain subclass overrides of entity mapping methods.
+    """
+    import openframe.adapters.db.postgres.connection as conn_module
+
+    class CustomRepo(PostgresRepository):
+        marker = True
+
+    conn_module._pool_cache[mock_settings.database_url] = mock_pool
+    mock_pool.fetchval.return_value = 1
+
+    plugin = PostgresPlugin(mock_settings, table="items", repository_class=CustomRepo)
+    await plugin.initialize(plugin_context)
+
+    repo = plugin.get_repository()
+    assert isinstance(repo, CustomRepo)
+    assert hasattr(repo, "marker")
+    conn_module._pool_cache.clear()
+
+
+async def test_get_repository_returns_subclass_not_base_class(
+    settings, plugin_context, mock_pool, mock_settings
+):
+    """type(repo) must be the subclass, not just isinstance-compatible."""
+    import openframe.adapters.db.postgres.connection as conn_module
+
+    class CustomRepo(PostgresRepository):
+        pass
+
+    conn_module._pool_cache[mock_settings.database_url] = mock_pool
+    mock_pool.fetchval.return_value = 1
+
+    plugin = PostgresPlugin(mock_settings, table="items", repository_class=CustomRepo)
+    await plugin.initialize(plugin_context)
+
+    assert type(plugin.get_repository()) is CustomRepo
     conn_module._pool_cache.clear()
