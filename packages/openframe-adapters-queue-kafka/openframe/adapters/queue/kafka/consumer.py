@@ -14,6 +14,15 @@ Error handling:
     ``KafkaConnectionError`` on startup → ``AdapterConnectionError``.
     ``KafkaError`` on startup → ``AdapterConfigurationError``.
     Handler exceptions are caught, logged, and the loop continues.
+
+Cross-service trace correlation:
+    Each message's headers are checked for a W3C ``traceparent`` (injected by
+    the producing side — see ``KafkaProducer._inject_trace_headers``). If
+    present, the ``handler`` invocation runs inside that extracted parent
+    context, so any spans the handler creates (e.g. via ``TracingProxy``
+    wrapping a downstream repository) continue the producer's trace instead
+    of starting a disconnected one. If no traceparent is present, the
+    handler runs with no special context — unchanged behaviour.
 """
 from __future__ import annotations
 
@@ -26,6 +35,9 @@ import aiokafka
 import aiokafka.errors
 from aiokafka import AIOKafkaConsumer
 
+from opentelemetry import context as otel_context
+from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
+
 from openframe.core.exceptions import (
     AdapterConfigurationError,
     AdapterConnectionError,
@@ -37,6 +49,22 @@ __all__ = ["KafkaConsumer"]
 
 T = TypeVar("T")
 _logger = logging.getLogger(__name__)
+_propagator = TraceContextTextMapPropagator()
+
+
+def _extract_trace_context(headers: list[tuple[str, bytes]]) -> otel_context.Context:
+    """
+    Extract a W3C traceparent (if present) from a Kafka message's headers.
+
+    Mirrors ``KafkaProducer._inject_trace_headers`` on the other side of
+    this boundary. ``aiokafka`` message headers are ``list[tuple[str, bytes]]``
+    rather than a dict, so they're decoded into the str->str carrier shape
+    the propagator expects. If no traceparent header is present, ``extract``
+    returns the current (empty) context unchanged — safe no-op, identical
+    to today's behaviour.
+    """
+    carrier = {k: v.decode("utf-8") for k, v in (headers or [])}
+    return _propagator.extract(carrier)
 
 
 class KafkaConsumer(Generic[T]):
@@ -148,7 +176,12 @@ class KafkaConsumer(Generic[T]):
                     break
                 try:
                     message = self._deserialise(msg.value)
-                    await handler(message)
+                    parent_ctx = _extract_trace_context(msg.headers)
+                    token = otel_context.attach(parent_ctx)
+                    try:
+                        await handler(message)
+                    finally:
+                        otel_context.detach(token)
                     await self.ack(message)
                 except Exception as exc:  # noqa: BLE001
                     _logger.error(
