@@ -1,3 +1,18 @@
+## [postgres 2.0.1 / mongo 2.0.1 / redis 2.0.1 / kafka 1.4.1] - 2026-07-08
+
+### Changed
+- Updated all imports from the now-removed `openframe.core.contracts` to
+  `openframe.core.ports`, tracking the openframe-core v3.1.0 merge of
+  `contracts` into `ports` (no compatibility shim was provided at the old
+  path). Pure import-path update — no class names, method signatures, or
+  behavior changed.
+- Added the (previously missing) `from openframe.core.ports import
+  BaseRepository` to `postgres/repository.py` and `from openframe.core.ports
+  import BaseConsumer` to `kafka/consumer.py`, matching the pattern already
+  present in the other repository/producer modules.
+- The existing `openframe-core>=3.0,<4` pin is unchanged — it already
+  covers 3.1.0. These are patch releases.
+
 ## [postgres 2.0.0 / mongo 2.0.0 / redis 2.0.0 / kafka 1.4.0] - 2026-07-08
 
 ### Breaking

@@ -15,7 +15,7 @@ from openframe.adapters.queue.kafka import (
     KafkaProducer,
     KafkaSettings,
 )
-from openframe.core.contracts import BasePort, PluginContext, PluginStatus
+from openframe.core.ports import BasePort, PluginContext, PluginStatus
 from openframe.core.testing.contracts import PortContractTests
 
 
@@ -45,7 +45,7 @@ def test_kafka_plugin_name(plugin: KafkaPlugin) -> None:
 
 
 def test_kafka_plugin_version(plugin: KafkaPlugin) -> None:
-    assert plugin.version == "1.4.0"
+    assert plugin.version == "1.4.1"
 
 
 def test_kafka_plugin_capability(plugin: KafkaPlugin) -> None:

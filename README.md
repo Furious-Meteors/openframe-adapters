@@ -238,7 +238,7 @@ returns a single `PluginHealth` snapshot and never raises:
 
 ```python
 from openframe.adapters.db.postgres import PostgresPlugin, PostgresSettings
-from openframe.core.contracts import BasePort, PluginContext, PluginHealth
+from openframe.core.ports import BasePort, PluginContext, PluginHealth
 
 plugin = PostgresPlugin(PostgresSettings(), table="items")
 assert isinstance(plugin, BasePort)   # True — Identity + Lifecycle

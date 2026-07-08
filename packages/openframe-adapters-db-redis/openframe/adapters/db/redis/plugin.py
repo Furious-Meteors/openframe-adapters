@@ -36,7 +36,7 @@ from __future__ import annotations
 
 import logging
 
-from openframe.core.contracts import BasePort, Capability, PluginContext, PluginHealth, PluginStatus
+from openframe.core.ports import BasePort, Capability, PluginContext, PluginHealth, PluginStatus
 from openframe.core.exceptions import AdapterConnectionError
 
 from openframe.adapters.db.redis.config import RedisSettings
@@ -67,7 +67,7 @@ class RedisPlugin(BasePort):
     """
 
     name:       str = "openframe-redis"
-    version:    str = "2.0.0"
+    version:    str = "2.0.1"
     capability: Capability = Capability.CACHE
 
     def __init__(self, settings: RedisSettings) -> None:

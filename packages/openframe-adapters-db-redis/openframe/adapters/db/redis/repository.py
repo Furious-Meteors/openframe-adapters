@@ -30,7 +30,7 @@ from typing import Any, Generic, TypeVar
 
 import redis.exceptions
 
-from openframe.core.contracts import Capability, PluginContext, PluginHealth, PluginStatus
+from openframe.core.ports import Capability, PluginContext, PluginHealth, PluginStatus
 from openframe.core.exceptions import (
     AdapterConnectionError,
     AdapterQueryError,

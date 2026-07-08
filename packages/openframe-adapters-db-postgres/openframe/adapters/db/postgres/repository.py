@@ -36,13 +36,13 @@ from typing import Any, Generic, TypeVar
 
 import asyncpg
 
-from openframe.core.contracts import Capability, PluginContext, PluginHealth, PluginStatus
 from openframe.core.exceptions import (
     AdapterConfigurationError,
     AdapterConnectionError,
     AdapterQueryError,
     AdapterTimeoutError,
 )
+from openframe.core.ports import BaseRepository, Capability, PluginContext, PluginHealth, PluginStatus
 
 from .config import PostgresSettings
 from .connection import _pool_cache, get_postgres_pool

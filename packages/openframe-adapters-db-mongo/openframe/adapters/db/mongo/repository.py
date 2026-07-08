@@ -40,7 +40,7 @@ import pymongo.errors
 from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorCollection
 
-from openframe.core.contracts import Capability, PluginContext, PluginHealth, PluginStatus
+from openframe.core.ports import Capability, PluginContext, PluginHealth, PluginStatus
 from openframe.core.exceptions import (
     AdapterConfigurationError,
     AdapterConnectionError,

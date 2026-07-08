@@ -10,7 +10,7 @@ import pytest
 from unittest.mock import AsyncMock
 
 from openframe.adapters.db.postgres import PostgresPlugin, PostgresRepository, PostgresSettings
-from openframe.core.contracts import BasePort, PluginContext, PluginHealth, PluginStatus
+from openframe.core.ports import BasePort, PluginContext, PluginHealth, PluginStatus
 from openframe.core.testing.contracts import PortContractTests
 
 
@@ -49,7 +49,7 @@ def test_postgres_plugin_name(plugin):
 
 
 def test_postgres_plugin_version(plugin):
-    assert plugin.version == "2.0.0"
+    assert plugin.version == "2.0.1"
 
 
 def test_postgres_plugin_capability(plugin):

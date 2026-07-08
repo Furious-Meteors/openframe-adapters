@@ -37,11 +37,11 @@ from aiokafka import AIOKafkaConsumer
 
 from opentelemetry import context as otel_context
 
-from openframe.core.contracts import Capability, PluginContext, PluginHealth, PluginStatus
 from openframe.core.exceptions import (
     AdapterConfigurationError,
     AdapterConnectionError,
 )
+from openframe.core.ports import BaseConsumer, Capability, PluginContext, PluginHealth, PluginStatus
 from openframe.core.tracing.propagation import extract as _extract_propagation
 
 from .config import KafkaSettings

@@ -27,7 +27,7 @@ import aiokafka
 import aiokafka.errors
 from aiokafka import AIOKafkaProducer
 
-from openframe.core.contracts import Capability, PluginContext, PluginHealth, PluginStatus
+from openframe.core.ports import Capability, PluginContext, PluginHealth, PluginStatus
 from openframe.core.exceptions import (
     AdapterConfigurationError,
     AdapterConnectionError,

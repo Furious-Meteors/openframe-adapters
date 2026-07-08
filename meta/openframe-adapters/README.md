@@ -189,11 +189,13 @@ app.add_middleware(TelemetryMiddleware)
 ### Plugin capabilities
 
 Every `*Plugin` class declares a `capability` attribute — a typed
-`openframe.core.contracts.Capability` enum member (not a raw string as of
-`openframe-core` v3.0). This is the key used by `registry.get()`:
+`openframe.core.ports.Capability` enum member (not a raw string as of
+`openframe-core` v3.0; the module was `openframe.core.contracts` before
+v3.1, which merged it into `openframe.core.ports`). This is the key used
+by `registry.get()`:
 
 ```python
-from openframe.core.contracts import Capability
+from openframe.core.ports import Capability
 
 registry.get(Capability.PERSISTENCE)  # → PostgresPlugin / MongoPlugin
 registry.get(Capability.CACHE)        # → RedisPlugin
@@ -209,7 +211,7 @@ ecosystem:
 | `Capability.QUEUE` | Kafka, NATS, RabbitMQ | Message publishing and consumption |
 | `Capability.SEARCH` | Milvus, Qdrant, ChromaDB, FAISS, FalkorDB | Vector similarity search |
 
-The closed `Capability` enum (`openframe.core.contracts.Capability`) has no
+The closed `Capability` enum (`openframe.core.ports.Capability`) has no
 dedicated time-series member as of core v3.0 — InfluxDB and other
 time-series adapters do not yet have an assigned capability in this
 taxonomy.
@@ -279,7 +281,7 @@ page in the `openframe-core` documentation.
 automatically as a transitive dependency — you never need to declare it
 separately. As of this release, `postgres`, `mongo`, `redis`, and `kafka`
 pin `openframe-core>=3.0,<4` (the ADR-006 unified port/lifecycle contract
-layer — `BasePort`, typed `Capability`, `openframe.core.contracts`). Other
+layer — `BasePort`, typed `Capability`, `openframe.core.ports`). Other
 adapter packages in this meta-package may still be on an older `core` pin
 until they are migrated; check each package's own `pyproject.toml` for its
 exact range.

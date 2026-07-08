@@ -37,7 +37,7 @@ from __future__ import annotations
 
 import logging
 
-from openframe.core.contracts import BasePort, Capability, PluginContext, PluginHealth, PluginStatus
+from openframe.core.ports import BasePort, Capability, PluginContext, PluginHealth, PluginStatus
 
 from openframe.adapters.queue.kafka.config import KafkaSettings
 from openframe.adapters.queue.kafka.consumer import KafkaConsumer
@@ -79,7 +79,7 @@ class KafkaPlugin(BasePort):
     """
 
     name:       str = "openframe-kafka"
-    version:    str = "1.4.0"
+    version:    str = "1.4.1"
     capability: Capability = Capability.QUEUE
 
     def __init__(

@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import logging
 
-from openframe.core.contracts import BasePort, Capability, PluginContext, PluginHealth, PluginStatus
+from openframe.core.ports import BasePort, Capability, PluginContext, PluginHealth, PluginStatus
 from openframe.core.exceptions import AdapterConnectionError
 
 from openframe.adapters.db.mongo.config import MongoSettings
@@ -74,7 +74,7 @@ class MongoPlugin(BasePort):
     """
 
     name:       str = "openframe-mongo"
-    version:    str = "2.0.0"
+    version:    str = "2.0.1"
     capability: Capability = Capability.PERSISTENCE
 
     def __init__(
