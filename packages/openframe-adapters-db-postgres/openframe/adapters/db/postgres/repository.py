@@ -61,9 +61,9 @@ class PostgresRepository(Generic[T]):
     re-raised as ``AdapterError`` subclasses. Every operation wraps its
     asyncpg call in ``asyncio.timeout(settings.operation_timeout)``.
 
-    Health check: ``health()`` is the canonical — and only — health check.
-    It returns a ``PluginHealth`` snapshot and never raises. ``ping()`` and
-    ``is_ready()`` were removed in v2.0; use ``health()``.
+    Health check: ``health()`` is the sole health check on this repository.
+    It verifies backend connectivity and returns a ``PluginHealth``
+    snapshot describing the result — never raises.
 
     Class attributes (override in subclass):
         _table:     Table name used when no ``table`` argument is passed.

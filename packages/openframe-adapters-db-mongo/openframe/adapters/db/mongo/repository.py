@@ -81,9 +81,9 @@ class MongoRepository(Generic[T]):
     motor call in ``asyncio.timeout(settings.operation_timeout)`` and also
     passes ``max_time_ms`` to the motor method for server-side enforcement.
 
-    Health check: ``health()`` is the canonical — and only — health check.
-    It returns a ``PluginHealth`` snapshot and never raises. ``ping()`` and
-    ``is_ready()`` were removed in v2.0; use ``health()``.
+    Health check: ``health()`` is the sole health check on this repository.
+    It verifies backend connectivity and returns a ``PluginHealth``
+    snapshot describing the result — never raises.
 
     Class attributes (override in subclass):
         _collection: Collection name used when no ``collection`` arg is passed.

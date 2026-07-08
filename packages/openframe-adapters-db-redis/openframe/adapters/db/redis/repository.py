@@ -55,9 +55,9 @@ class RedisRepository(Generic[T]):
     re-raised as ``AdapterError`` subclasses. Every operation wraps its
     Redis command in ``asyncio.timeout(settings.operation_timeout)``.
 
-    Health check: ``health()`` is the canonical — and only — health check.
-    It returns a ``PluginHealth`` snapshot and never raises. ``ping()`` and
-    ``is_ready()`` were removed in v2.0; use ``health()``.
+    Health check: ``health()`` is the sole health check on this repository.
+    It verifies backend connectivity and returns a ``PluginHealth``
+    snapshot describing the result — never raises.
 
     Entities are stored as JSON strings under prefixed keys:
         ``{settings.redis_key_prefix}:{entity_id}``
