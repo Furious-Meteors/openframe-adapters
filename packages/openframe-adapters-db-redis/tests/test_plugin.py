@@ -7,8 +7,10 @@ from __future__ import annotations
 
 import pytest
 
+from unittest.mock import AsyncMock
+
 from openframe.adapters.db.redis import RedisPlugin, RedisRepository, RedisSettings
-from openframe.core.contracts import BasePort, PluginContext, PluginStatus
+from openframe.core.contracts import BasePort, PluginContext, PluginHealth, PluginStatus
 from openframe.core.testing.contracts import PortContractTests
 
 
@@ -45,7 +47,7 @@ def test_redis_plugin_name(plugin: RedisPlugin) -> None:
 
 
 def test_redis_plugin_version(plugin: RedisPlugin) -> None:
-    assert plugin.version == "1.2.0"
+    assert plugin.version == "2.0.0"
 
 
 def test_redis_plugin_capability(plugin: RedisPlugin) -> None:
@@ -54,15 +56,21 @@ def test_redis_plugin_capability(plugin: RedisPlugin) -> None:
 
 # ── Lifecycle ──────────────────────────────────────────────────────────────
 
-async def test_initialize_succeeds_when_ping_returns_true(
+async def test_initialize_succeeds_when_health_is_ready(
     plugin: RedisPlugin,
     plugin_context: PluginContext,
     mock_redis: object,
     mock_settings: RedisSettings,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Successful client creation + ping → status READY."""
+    """Successful client creation + repo.health() READY → plugin status READY."""
     import openframe.adapters.db.redis.connection as conn_module
     conn_module._client_cache[mock_settings.redis_url] = mock_redis  # type: ignore[arg-type]
+    monkeypatch.setattr(
+        RedisRepository,
+        "health",
+        AsyncMock(return_value=PluginHealth(status=PluginStatus.READY, message="")),
+    )
 
     plugin._settings = mock_settings
     await plugin.initialize(plugin_context)
@@ -71,21 +79,26 @@ async def test_initialize_succeeds_when_ping_returns_true(
     conn_module._client_cache.clear()
 
 
-async def test_initialize_fails_when_ping_raises(
+async def test_initialize_fails_when_health_is_not_ready(
     plugin: RedisPlugin,
     plugin_context: PluginContext,
     mock_redis: object,
     mock_settings: RedisSettings,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Ping raising an exception → status FAILED, exception propagated."""
-    from unittest.mock import AsyncMock
+    """repo.health() reports non-READY → status FAILED, AdapterConnectionError raised."""
     import openframe.adapters.db.redis.connection as conn_module
+    from openframe.core.exceptions import AdapterConnectionError
 
-    mock_redis.ping = AsyncMock(side_effect=Exception("refused"))  # type: ignore[attr-defined]
     conn_module._client_cache[mock_settings.redis_url] = mock_redis  # type: ignore[arg-type]
+    monkeypatch.setattr(
+        RedisRepository,
+        "health",
+        AsyncMock(return_value=PluginHealth(status=PluginStatus.FAILED, message="refused")),
+    )
 
     plugin._settings = mock_settings
-    with pytest.raises(Exception):
+    with pytest.raises(AdapterConnectionError):
         await plugin.initialize(plugin_context)
 
     assert plugin._status == PluginStatus.FAILED
@@ -160,10 +173,16 @@ async def test_health_returns_ready_after_initialize(
     plugin_context: PluginContext,
     mock_redis: object,
     mock_settings: RedisSettings,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """health() after successful init with ping returning True → READY."""
+    """health() after successful init delegates to repo.health() → READY."""
     import openframe.adapters.db.redis.connection as conn_module
     conn_module._client_cache[mock_settings.redis_url] = mock_redis  # type: ignore[arg-type]
+    monkeypatch.setattr(
+        RedisRepository,
+        "health",
+        AsyncMock(return_value=PluginHealth(status=PluginStatus.READY, message="")),
+    )
     plugin._settings = mock_settings
     await plugin.initialize(plugin_context)
 
@@ -172,22 +191,31 @@ async def test_health_returns_ready_after_initialize(
     conn_module._client_cache.clear()
 
 
-async def test_health_returns_failed_when_ping_raises(
+async def test_health_returns_failed_when_repo_health_fails(
     plugin: RedisPlugin,
     plugin_context: PluginContext,
     mock_redis: object,
     mock_settings: RedisSettings,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """health() when ping raises → FAILED status, no exception propagated."""
-    from unittest.mock import AsyncMock
+    """health() delegates to repo.health() → FAILED status surfaces, no exception raised."""
     import openframe.adapters.db.redis.connection as conn_module
 
     conn_module._client_cache[mock_settings.redis_url] = mock_redis  # type: ignore[arg-type]
+    monkeypatch.setattr(
+        RedisRepository,
+        "health",
+        AsyncMock(return_value=PluginHealth(status=PluginStatus.READY, message="")),
+    )
     plugin._settings = mock_settings
     await plugin.initialize(plugin_context)
 
-    # Make subsequent ping calls fail
-    mock_redis.ping = AsyncMock(side_effect=Exception("db gone"))  # type: ignore[attr-defined]
+    # Now make repo.health() report a failure
+    monkeypatch.setattr(
+        RedisRepository,
+        "health",
+        AsyncMock(return_value=PluginHealth(status=PluginStatus.FAILED, message="db gone")),
+    )
     result = await plugin.health()
     assert result is not None
     assert result.status == PluginStatus.FAILED

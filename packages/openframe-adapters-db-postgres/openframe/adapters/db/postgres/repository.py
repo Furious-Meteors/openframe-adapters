@@ -61,6 +61,10 @@ class PostgresRepository(Generic[T]):
     re-raised as ``AdapterError`` subclasses. Every operation wraps its
     asyncpg call in ``asyncio.timeout(settings.operation_timeout)``.
 
+    Health check: ``health()`` is the canonical — and only — health check.
+    It returns a ``PluginHealth`` snapshot and never raises. ``ping()`` and
+    ``is_ready()`` were removed in v2.0; use ``health()``.
+
     Class attributes (override in subclass):
         _table:     Table name used when no ``table`` argument is passed.
         _id_column: Primary key column. Default ``"id"``.
@@ -366,60 +370,6 @@ class PostgresRepository(Generic[T]):
         return status == "DELETE 1"
 
     # ------------------------------------------------------------------
-    # Deprecated health-check methods (use plugin.health() instead)
-    # ------------------------------------------------------------------
-
-    async def ping(self) -> bool:
-        """
-        Low-cost liveness check — ``SELECT 1`` with a 5-second timeout.
-
-        Returns:
-            ``True`` if the backend responded, ``False`` on any failure.
-            Never raises.
-
-        .. deprecated::
-            Use plugin.health() instead, which returns a PluginHealth snapshot
-            and is the canonical health check in openframe-core v3.0.
-            ping() and is_ready() will be removed in the next major version
-            of this adapter package.
-        """
-        try:
-            pool = await get_postgres_pool(self._settings)
-            await asyncio.wait_for(pool.fetchval("SELECT 1"), timeout=5.0)
-            return True
-        except Exception:  # noqa: BLE001
-            return False
-
-    async def is_ready(self) -> bool:
-        """
-        Full readiness check — verifies public schema tables are accessible.
-
-        Queries ``pg_tables`` to confirm the database connection is healthy
-        and the schema is queryable. Uses a 10-second timeout.
-
-        Returns:
-            ``True`` if the database is ready, ``False`` on any failure.
-            Never raises.
-
-        .. deprecated::
-            Use plugin.health() instead, which returns a PluginHealth snapshot
-            and is the canonical health check in openframe-core v3.0.
-            ping() and is_ready() will be removed in the next major version
-            of this adapter package.
-        """
-        try:
-            pool = await get_postgres_pool(self._settings)
-            await asyncio.wait_for(
-                pool.fetchval(
-                    "SELECT COUNT(*) FROM pg_tables WHERE schemaname = 'public'"
-                ),
-                timeout=10.0,
-            )
-            return True
-        except Exception:  # noqa: BLE001
-            return False
-
-    # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
 
@@ -454,9 +404,10 @@ class PostgresRepository(Generic[T]):
             AdapterConnectionError: PostgreSQL is unreachable.
         """
         await get_postgres_pool(self._settings)
-        if not await self.ping():
+        health = await self.health()
+        if health.status != PluginStatus.READY:
             raise AdapterConnectionError(
-                "PostgreSQL connectivity check failed during initialize()",
+                health.message or "PostgreSQL connectivity check failed during initialize()",
                 adapter=self._settings.adapter_name,
                 operation="initialize",
             )
@@ -469,10 +420,12 @@ class PostgresRepository(Generic[T]):
         """
         BasePort lifecycle entry point — returns a PluginHealth snapshot.
 
-        Wraps ping() rather than duplicating the liveness check. Never raises.
+        The sole connectivity check on this repository — a low-cost
+        ``SELECT 1`` against the pool with a 5-second timeout. Never raises.
         """
-        healthy = await self.ping()
-        return PluginHealth(
-            status=PluginStatus.READY if healthy else PluginStatus.FAILED,
-            message="" if healthy else "ping() returned False",
-        )
+        try:
+            pool = await get_postgres_pool(self._settings)
+            await asyncio.wait_for(pool.fetchval("SELECT 1"), timeout=5.0)
+            return PluginHealth(status=PluginStatus.READY, message="")
+        except Exception as exc:  # noqa: BLE001
+            return PluginHealth(status=PluginStatus.FAILED, message=str(exc))

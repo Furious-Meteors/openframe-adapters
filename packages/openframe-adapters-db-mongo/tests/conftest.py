@@ -43,7 +43,6 @@ def mock_client(mock_collection: MagicMock) -> MagicMock:
     client = MagicMock()
     db = MagicMock()
     db.__getitem__ = MagicMock(return_value=mock_collection)
-    db.list_collection_names = AsyncMock(return_value=["artifacts"])
     client.__getitem__ = MagicMock(return_value=db)
     client.admin = MagicMock()
     client.admin.command = AsyncMock(return_value={"ok": 1})

@@ -79,7 +79,7 @@ class KafkaPlugin(BasePort):
     """
 
     name:       str = "openframe-kafka"
-    version:    str = "1.3.0"
+    version:    str = "1.4.0"
     capability: Capability = Capability.QUEUE
 
     def __init__(

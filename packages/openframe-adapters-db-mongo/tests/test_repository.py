@@ -115,12 +115,10 @@ class TestMongoRepositoryContracts(RepositoryContractTests):
         mock_col.count_documents = AsyncMock(side_effect=_count_documents)
         mock_col.find_one_and_update = AsyncMock(side_effect=_find_one_and_update)
         mock_col.delete_one = AsyncMock(side_effect=_delete_one)
-        mock_col.list_collection_names = AsyncMock(return_value=["items"])
 
         # ── Wire mock client → db → collection ───────────────────────────
         db = MagicMock()
         db.__getitem__ = MagicMock(return_value=mock_col)
-        db.list_collection_names = AsyncMock(return_value=["items"])
 
         client = MagicMock()
         client.__getitem__ = MagicMock(return_value=db)

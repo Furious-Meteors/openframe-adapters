@@ -1,3 +1,39 @@
+## [postgres 2.0.0 / mongo 2.0.0 / redis 2.0.0 / kafka 1.4.0] - 2026-07-08
+
+### Breaking
+- `ping()` and `is_ready()` removed from `PostgresRepository`,
+  `MongoRepository`, and `RedisRepository` (deprecated in the prior
+  release; this is the removal). `health()` is now the sole health check
+  on these classes — it returns a `PluginHealth` snapshot and never
+  raises. This is why `postgres`/`mongo`/`redis` bump to **2.0.0**; `kafka`
+  is unaffected by this removal and bumps only to **1.4.0**.
+
+### Changed
+- `PostgresPlugin`/`MongoPlugin`/`RedisPlugin` `initialize()` and
+  `health()` rewritten to delegate to `self._repo.health()` (returns
+  `PluginHealth` directly, no bool translation) instead of
+  `self._repo.ping()`.
+- `PostgresRepository`/`MongoRepository`/`RedisRepository` `initialize()`
+  and `health()` now perform their connectivity check directly (`SELECT
+  1` / `admin.command("ping")` / Redis `PING`) rather than delegating to
+  the removed `ping()`.
+- Namespace packaging standardized to PEP 420 implicit namespace packages
+  across all four packages — removed the pkgutil-style `__init__.py`
+  shims previously present at the intermediate `openframe/`,
+  `openframe/adapters/`, and `openframe/adapters/db|queue/` levels (this
+  also reverses the pkgutil-style files briefly added to `postgres`/
+  `mongo` earlier in the v3 migration).
+- `openframe-adapters-queue-kafka`'s `tests/conftest.py` gained the
+  "Canonical OTel reset fixtures from openframe-core v3.0" comment,
+  matching the other three packages (it never had one before).
+
+### Removed
+- `test_health.py` in all three DB packages — they exclusively tested the
+  now-removed `ping()`/`is_ready()` methods.
+- Now-dead mock scaffolding (`client.info`, `list_collection_names`)
+  exclusively used by the removed `is_ready()` in `conftest.py`/
+  `test_repository.py`.
+
 ## [postgres 1.3.0 / mongo 1.3.0 / redis 1.2.0 / kafka 1.3.0] - 2026-07-08
 
 ### Changed

@@ -23,6 +23,8 @@
 
 `postgres`, `mongo`, `redis`, and `kafka` pin `openframe-core>=3.0,<4` as of this release; other adapters in this family may still be on an earlier major until migrated — check each package's own `pyproject.toml`. The major version is the stability contract.
 
+`openframe-adapters-db-postgres`, `-mongo`, and `-redis` are at **2.0.0** as of this release — `ping()`/`is_ready()` (deprecated in the prior minor) have been removed; `health()` is now the sole health check. `openframe-adapters-queue-kafka` is at **1.4.0** (non-breaking).
+
 ---
 
 ## Installation
@@ -231,9 +233,8 @@ await consumer.subscribe("events", handler=handle)
 
 As of `openframe-core` v3.0 (ADR-006), the canonical health check lives on
 `health()`, part of the unified `BasePort` (`Identity` + `Lifecycle`)
-contract every `*Plugin` and repository/producer/consumer now satisfies. It
-returns a single `PluginHealth` snapshot instead of a `ping()`/`is_ready()`
-pair, and never raises:
+contract every `*Plugin` and repository/producer/consumer satisfies. It
+returns a single `PluginHealth` snapshot and never raises:
 
 ```python
 from openframe.adapters.db.postgres import PostgresPlugin, PostgresSettings
@@ -246,18 +247,18 @@ await plugin.initialize(PluginContext(config={}, plugin_name=plugin.name))
 health: PluginHealth = await plugin.health()   # never raises
 ```
 
-`repo.ping()` / `repo.is_ready()` still work on every repository — kept for
-backward compatibility — but are **deprecated** in favor of `health()` and
-will be removed in the next major version of each adapter package.
+`repo.health()` works the same way directly on the repository — it is the
+**sole** health check as of `openframe-adapters-db-postgres`/`-mongo`/
+`-redis` **2.0.0**. `ping()`/`is_ready()` were deprecated in the prior
+minor release and have now been **removed** — calling them raises
+`AttributeError`.
 
 ```python
 from openframe.adapters.db.postgres import PostgresRepository, PostgresSettings
 
 repo = PostgresRepository(PostgresSettings(), table="items", id_column="id")
 
-await repo.ping()      # deprecated — cheap liveness, SELECT 1
-await repo.is_ready()  # deprecated — full readiness, schema check
-await repo.health()    # preferred — returns PluginHealth, never raises
+health = await repo.health()   # the only health check — never raises
 ```
 
 ---

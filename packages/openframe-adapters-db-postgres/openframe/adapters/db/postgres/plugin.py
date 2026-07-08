@@ -51,10 +51,11 @@ class PostgresPlugin(BasePort):
 
     Lifecycle:
         initialize() — creates the asyncpg connection pool and verifies
-                       connectivity via ping(). Raises AdapterConnectionError
-                       if the database is unreachable.
+                       connectivity via the repository's health(). Raises
+                       AdapterConnectionError if the database is unreachable.
         shutdown()   — closes the connection pool. Never raises.
-        health()     — calls ping() and returns PluginHealth. Never raises.
+        health()     — delegates to the repository's health() and returns
+                       its PluginHealth. Never raises.
 
     The plugin exposes get_repository() after initialization for use
     in the composition root or ApplicationBootstrap.
@@ -71,7 +72,7 @@ class PostgresPlugin(BasePort):
     """
 
     name:       str = "openframe-postgres"
-    version:    str = "1.3.0"
+    version:    str = "2.0.0"
     capability: Capability = Capability.PERSISTENCE
 
     def __init__(
@@ -113,7 +114,7 @@ class PostgresPlugin(BasePort):
 
         If a ``table`` was passed to the constructor, a
         :class:`PostgresRepository` is created and connectivity is verified
-        via ``repo.ping()``.  When no table is provided the plugin is used
+        via ``repo.health()``.  When no table is provided the plugin is used
         purely as a connection manager: connectivity is verified with a
         direct ``SELECT 1`` against the pool.
 
@@ -135,12 +136,13 @@ class PostgresPlugin(BasePort):
                     table=self._table,
                     id_column=self._id_column,
                 )
-                if not await self._repo.ping():
+                health = await self._repo.health()
+                if health.status != PluginStatus.READY:
                     raise AdapterConnectionError(
-                        "PostgreSQL ping failed after pool creation",
+                        health.message or "PostgreSQL health check failed after pool creation",
                         adapter="postgres",
                         operation="initialize",
-                    )
+                    ) from None
             else:
                 # Verify pool connectivity without requiring a table.
                 try:
@@ -181,6 +183,11 @@ class PostgresPlugin(BasePort):
         """
         Return current health snapshot.
 
+        Delegates to the repository's own ``health()`` when one exists — no
+        translation needed, it already returns a ``PluginHealth``. When the
+        plugin was constructed without a table (connection-manager-only
+        mode, no repository), the pool is checked directly.
+
         Never raises — returns FAILED status on any exception.
         """
         try:
@@ -190,19 +197,14 @@ class PostgresPlugin(BasePort):
                     message=f"Plugin status: {self._status.name}",
                 )
             if self._repo is not None:
-                healthy = await self._repo.ping()
-            else:
-                # No repository — ping the pool directly.
-                try:
-                    pool = await get_postgres_pool(self._settings)
-                    await pool.fetchval("SELECT 1")
-                    healthy = True
-                except Exception:
-                    healthy = False
-            return PluginHealth(
-                status=PluginStatus.READY if healthy else PluginStatus.FAILED,
-                message="" if healthy else "ping() returned False",
-            )
+                return await self._repo.health()
+            # No repository — check the pool directly.
+            try:
+                pool = await get_postgres_pool(self._settings)
+                await pool.fetchval("SELECT 1")
+                return PluginHealth(status=PluginStatus.READY, message="")
+            except Exception as exc:
+                return PluginHealth(status=PluginStatus.FAILED, message=str(exc))
         except Exception as exc:
             return PluginHealth(
                 status=PluginStatus.FAILED,

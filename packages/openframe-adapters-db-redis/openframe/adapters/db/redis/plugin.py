@@ -56,17 +56,18 @@ class RedisPlugin(BasePort):
 
     Lifecycle:
         initialize() — creates the Redis client and verifies connectivity
-                       via ping(). Raises ``AdapterConnectionError`` if Redis
-                       is unreachable.
+                       via the repository's health(). Raises
+                       ``AdapterConnectionError`` if Redis is unreachable.
         shutdown()   — closes the Redis client. Never raises.
-        health()     — calls ping() and returns PluginHealth. Never raises.
+        health()     — delegates to the repository's health() and returns
+                       its PluginHealth. Never raises.
 
     The plugin exposes get_repository() after initialization for use
     in the composition root or ApplicationBootstrap.
     """
 
     name:       str = "openframe-redis"
-    version:    str = "1.2.0"
+    version:    str = "2.0.0"
     capability: Capability = Capability.CACHE
 
     def __init__(self, settings: RedisSettings) -> None:
@@ -91,12 +92,13 @@ class RedisPlugin(BasePort):
         try:
             await get_redis_client(self._settings)
             self._repo = RedisRepository(self._settings)
-            if not await self._repo.ping():
+            health = await self._repo.health()
+            if health.status != PluginStatus.READY:
                 raise AdapterConnectionError(
-                    "Redis ping failed after client creation",
+                    health.message or "Redis health check failed after client creation",
                     adapter="redis",
                     operation="initialize",
-                )
+                ) from None
             self._status = PluginStatus.READY
             _logger.info(
                 "RedisPlugin initialized — %s",
@@ -126,6 +128,9 @@ class RedisPlugin(BasePort):
         """
         Return current health snapshot.
 
+        Delegates to the repository's own ``health()`` — no translation
+        needed, it already returns a ``PluginHealth``.
+
         Never raises — returns FAILED status on any exception.
         """
         try:
@@ -134,11 +139,7 @@ class RedisPlugin(BasePort):
                     status=PluginStatus.FAILED,
                     message=f"Plugin status: {self._status.name}",
                 )
-            healthy = await self._repo.ping()
-            return PluginHealth(
-                status=PluginStatus.READY if healthy else PluginStatus.FAILED,
-                message="" if healthy else "ping() returned False",
-            )
+            return await self._repo.health()
         except Exception as exc:
             return PluginHealth(
                 status=PluginStatus.FAILED,

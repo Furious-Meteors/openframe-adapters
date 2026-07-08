@@ -79,8 +79,9 @@ from openframe.adapters.db.postgres import PostgresRepository
 from openframe.adapters.db.mongo import MongoRepository
 ```
 
-Each individual adapter package uses Python namespace packages under
-`openframe.adapters.*`, so all adapters share the same top-level namespace
+Each individual adapter package uses PEP 420 implicit namespace packages
+under `openframe.adapters.*` (uniformly across all four migrated packages
+as of this release), so all adapters share the same top-level namespace
 without any conflicts.
 
 ---
@@ -289,9 +290,15 @@ exact range.
 
 Each adapter package is versioned independently and published to PyPI under
 its own name (e.g. `openframe-adapters-db-postgres`). This meta-package pins
-all of them at `>=1.0,<2`, so patch and minor releases are picked up
+each one to its own major-version range (see the `[project.optional-dependencies]`
+table in `pyproject.toml`), so patch and minor releases are picked up
 automatically the next time you run `pip install --upgrade`. Only a major
 version bump in an individual adapter requires a meta-package update.
+
+**Breaking change in this release**: `postgres`, `mongo`, and `redis` are
+now pinned to `>=2.0,<3` — `ping()`/`is_ready()` were removed from their
+repository classes (deprecated in the prior minor release; `health()` is
+now the sole health check). `kafka` remains non-breaking at `>=1.4,<2`.
 
 When a new adapter is added to the ecosystem, only this `pyproject.toml`
 changes — one new line in `[project.optional-dependencies]` and an update to

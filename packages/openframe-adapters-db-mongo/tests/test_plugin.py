@@ -7,8 +7,10 @@ from __future__ import annotations
 
 import pytest
 
+from unittest.mock import AsyncMock
+
 from openframe.adapters.db.mongo import MongoPlugin, MongoRepository, MongoSettings
-from openframe.core.contracts import BasePort, PluginContext, PluginStatus
+from openframe.core.contracts import BasePort, PluginContext, PluginHealth, PluginStatus
 from openframe.core.testing.contracts import PortContractTests
 
 
@@ -48,7 +50,7 @@ def test_mongo_plugin_name(plugin):
 
 
 def test_mongo_plugin_version(plugin):
-    assert plugin.version == "1.3.0"
+    assert plugin.version == "2.0.0"
 
 
 def test_mongo_plugin_capability(plugin):
@@ -57,13 +59,17 @@ def test_mongo_plugin_capability(plugin):
 
 # ── Lifecycle ──────────────────────────────────────────────────────────────
 
-async def test_initialize_succeeds_when_ping_returns_true(
-    plugin, plugin_context, mock_client, mock_settings
+async def test_initialize_succeeds_when_health_is_ready(
+    plugin, plugin_context, mock_client, mock_settings, monkeypatch
 ):
-    """Successful client creation + ping → status READY."""
+    """Successful client creation + repo.health() READY → plugin status READY."""
     import openframe.adapters.db.mongo.connection as conn_module
     conn_module._client_cache[mock_settings.mongo_url] = mock_client
-    mock_client.admin.command.return_value = {"ok": 1}
+    monkeypatch.setattr(
+        MongoRepository,
+        "health",
+        AsyncMock(return_value=PluginHealth(status=PluginStatus.READY, message="")),
+    )
 
     plugin._settings = mock_settings
     await plugin.initialize(plugin_context)
@@ -72,16 +78,22 @@ async def test_initialize_succeeds_when_ping_returns_true(
     conn_module._client_cache.clear()
 
 
-async def test_initialize_fails_when_ping_raises(
-    plugin, plugin_context, mock_client, mock_settings
+async def test_initialize_fails_when_health_is_not_ready(
+    plugin, plugin_context, mock_client, mock_settings, monkeypatch
 ):
-    """Ping raising an exception → status FAILED, exception propagated."""
+    """repo.health() reports non-READY → status FAILED, AdapterConnectionError raised."""
     import openframe.adapters.db.mongo.connection as conn_module
+    from openframe.core.exceptions import AdapterConnectionError
+
     conn_module._client_cache[mock_settings.mongo_url] = mock_client
-    mock_client.admin.command.side_effect = Exception("connection refused")
+    monkeypatch.setattr(
+        MongoRepository,
+        "health",
+        AsyncMock(return_value=PluginHealth(status=PluginStatus.FAILED, message="connection refused")),
+    )
 
     plugin._settings = mock_settings
-    with pytest.raises(Exception):
+    with pytest.raises(AdapterConnectionError):
         await plugin.initialize(plugin_context)
 
     assert plugin._status == PluginStatus.FAILED
@@ -150,12 +162,16 @@ async def test_health_never_raises(plugin):
 
 
 async def test_health_returns_ready_after_initialize(
-    plugin, plugin_context, mock_client, mock_settings
+    plugin, plugin_context, mock_client, mock_settings, monkeypatch
 ):
-    """health() after successful init with ping returning True → READY."""
+    """health() after successful init delegates to repo.health() → READY."""
     import openframe.adapters.db.mongo.connection as conn_module
     conn_module._client_cache[mock_settings.mongo_url] = mock_client
-    mock_client.admin.command.return_value = {"ok": 1}
+    monkeypatch.setattr(
+        MongoRepository,
+        "health",
+        AsyncMock(return_value=PluginHealth(status=PluginStatus.READY, message="")),
+    )
     plugin._settings = mock_settings
     await plugin.initialize(plugin_context)
 
@@ -164,18 +180,26 @@ async def test_health_returns_ready_after_initialize(
     conn_module._client_cache.clear()
 
 
-async def test_health_returns_failed_when_ping_raises(
-    plugin, plugin_context, mock_client, mock_settings
+async def test_health_returns_failed_when_repo_health_fails(
+    plugin, plugin_context, mock_client, mock_settings, monkeypatch
 ):
-    """health() when ping raises → FAILED status, no exception propagated."""
+    """health() delegates to repo.health() → FAILED status surfaces, no exception raised."""
     import openframe.adapters.db.mongo.connection as conn_module
     conn_module._client_cache[mock_settings.mongo_url] = mock_client
-    mock_client.admin.command.return_value = {"ok": 1}
+    monkeypatch.setattr(
+        MongoRepository,
+        "health",
+        AsyncMock(return_value=PluginHealth(status=PluginStatus.READY, message="")),
+    )
     plugin._settings = mock_settings
     await plugin.initialize(plugin_context)
 
-    # Make subsequent ping calls fail
-    mock_client.admin.command.side_effect = Exception("db gone")
+    # Now make repo.health() report a failure
+    monkeypatch.setattr(
+        MongoRepository,
+        "health",
+        AsyncMock(return_value=PluginHealth(status=PluginStatus.FAILED, message="db gone")),
+    )
     result = await plugin.health()
     assert result is not None
     assert result.status == PluginStatus.FAILED

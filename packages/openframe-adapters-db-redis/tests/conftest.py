@@ -28,7 +28,6 @@ def mock_redis():
     client.set    = AsyncMock(return_value=True)
     client.delete = AsyncMock(return_value=1)
     client.mget   = AsyncMock(return_value=[])
-    client.info   = AsyncMock(return_value={"redis_version": "7.0.0"})
     client.aclose = AsyncMock()
 
     # scan_iter must be an async generator — yields nothing by default.

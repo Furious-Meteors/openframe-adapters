@@ -81,6 +81,10 @@ class MongoRepository(Generic[T]):
     motor call in ``asyncio.timeout(settings.operation_timeout)`` and also
     passes ``max_time_ms`` to the motor method for server-side enforcement.
 
+    Health check: ``health()`` is the canonical — and only — health check.
+    It returns a ``PluginHealth`` snapshot and never raises. ``ping()`` and
+    ``is_ready()`` were removed in v2.0; use ``health()``.
+
     Class attributes (override in subclass):
         _collection: Collection name used when no ``collection`` arg is passed.
 
@@ -392,63 +396,6 @@ class MongoRepository(Generic[T]):
         return result.deleted_count == 1
 
     # ------------------------------------------------------------------
-    # Deprecated health-check methods (use plugin.health() instead)
-    # ------------------------------------------------------------------
-
-    async def ping(self) -> bool:
-        """
-        Low-cost liveness check — ``admin.command("ping")`` with 5-second timeout.
-
-        Returns:
-            ``True`` if the backend responded, ``False`` on any failure.
-            Never raises.
-
-        .. deprecated::
-            Use plugin.health() instead, which returns a PluginHealth snapshot
-            and is the canonical health check in openframe-core v3.0.
-            ping() and is_ready() will be removed in the next major version
-            of this adapter package.
-        """
-        try:
-            client = get_mongo_client(self._settings)
-            await asyncio.wait_for(
-                client.admin.command("ping"),
-                timeout=5.0,
-            )
-            return True
-        except Exception:  # noqa: BLE001
-            return False
-
-    async def is_ready(self) -> bool:
-        """
-        Full readiness check — lists collections in the configured database.
-
-        A successful ``list_collection_names()`` confirms the database is
-        reachable, authenticated, and the collection namespace is queryable.
-        Uses a 10-second timeout.
-
-        Returns:
-            ``True`` if the database is ready, ``False`` on any failure.
-            Never raises.
-
-        .. deprecated::
-            Use plugin.health() instead, which returns a PluginHealth snapshot
-            and is the canonical health check in openframe-core v3.0.
-            ping() and is_ready() will be removed in the next major version
-            of this adapter package.
-        """
-        try:
-            client = get_mongo_client(self._settings)
-            db = client[self._settings.mongo_database]
-            await asyncio.wait_for(
-                db.list_collection_names(),
-                timeout=10.0,
-            )
-            return True
-        except Exception:  # noqa: BLE001
-            return False
-
-    # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
 
@@ -483,9 +430,10 @@ class MongoRepository(Generic[T]):
             AdapterConnectionError: MongoDB is unreachable.
         """
         get_mongo_client(self._settings)
-        if not await self.ping():
+        health = await self.health()
+        if health.status != PluginStatus.READY:
             raise AdapterConnectionError(
-                "MongoDB connectivity check failed during initialize()",
+                health.message or "MongoDB connectivity check failed during initialize()",
                 adapter=self._settings.adapter_name,
                 operation="initialize",
             )
@@ -498,10 +446,12 @@ class MongoRepository(Generic[T]):
         """
         BasePort lifecycle entry point — returns a PluginHealth snapshot.
 
-        Wraps ping() rather than duplicating the liveness check. Never raises.
+        The sole connectivity check on this repository — ``admin.command
+        ("ping")`` with a 5-second timeout. Never raises.
         """
-        healthy = await self.ping()
-        return PluginHealth(
-            status=PluginStatus.READY if healthy else PluginStatus.FAILED,
-            message="" if healthy else "ping() returned False",
-        )
+        try:
+            client = get_mongo_client(self._settings)
+            await asyncio.wait_for(client.admin.command("ping"), timeout=5.0)
+            return PluginHealth(status=PluginStatus.READY, message="")
+        except Exception as exc:  # noqa: BLE001
+            return PluginHealth(status=PluginStatus.FAILED, message=str(exc))

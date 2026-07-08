@@ -40,9 +40,8 @@ class TestRedisRepositoryContracts(RepositoryContractTests):
 
         client = MagicMock()
 
-        # ping / info for health checks inside the repo
+        # ping for health() connectivity check inside the repo
         client.ping = AsyncMock(return_value=True)
-        client.info = AsyncMock(return_value={"redis_version": "7.0.0"})
         client.aclose = AsyncMock()
 
         async def _get(key: str) -> str | None:

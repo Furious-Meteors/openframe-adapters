@@ -55,6 +55,10 @@ class RedisRepository(Generic[T]):
     re-raised as ``AdapterError`` subclasses. Every operation wraps its
     Redis command in ``asyncio.timeout(settings.operation_timeout)``.
 
+    Health check: ``health()`` is the canonical — and only — health check.
+    It returns a ``PluginHealth`` snapshot and never raises. ``ping()`` and
+    ``is_ready()`` were removed in v2.0; use ``health()``.
+
     Entities are stored as JSON strings under prefixed keys:
         ``{settings.redis_key_prefix}:{entity_id}``
 
@@ -381,54 +385,6 @@ class RedisRepository(Generic[T]):
         return deleted > 0
 
     # ------------------------------------------------------------------
-    # Deprecated health-check methods (use plugin.health() instead)
-    # ------------------------------------------------------------------
-
-    async def ping(self) -> bool:
-        """
-        Low-cost liveness check — Redis ``PING`` command with 5-second timeout.
-
-        Returns:
-            ``True`` if the backend responded, ``False`` on any failure.
-            Never raises.
-
-        .. deprecated::
-            Use plugin.health() instead, which returns a PluginHealth snapshot
-            and is the canonical health check in openframe-core v3.0.
-            ping() and is_ready() will be removed in the next major version
-            of this adapter package.
-        """
-        try:
-            client = await get_redis_client(self._settings)
-            await asyncio.wait_for(client.ping(), timeout=5.0)
-            return True
-        except Exception:  # noqa: BLE001
-            return False
-
-    async def is_ready(self) -> bool:
-        """
-        Full readiness check — ``INFO server`` confirms Redis is alive and
-        returning valid server metadata.
-
-        Returns:
-            ``True`` if ``"redis_version"`` is present in the INFO response,
-            ``False`` on any failure.
-            Never raises.
-
-        .. deprecated::
-            Use plugin.health() instead, which returns a PluginHealth snapshot
-            and is the canonical health check in openframe-core v3.0.
-            ping() and is_ready() will be removed in the next major version
-            of this adapter package.
-        """
-        try:
-            client = await get_redis_client(self._settings)
-            info = await asyncio.wait_for(client.info("server"), timeout=10.0)
-            return "redis_version" in info
-        except Exception:  # noqa: BLE001
-            return False
-
-    # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
 
@@ -462,9 +418,10 @@ class RedisRepository(Generic[T]):
             AdapterConnectionError: Redis is unreachable.
         """
         await get_redis_client(self._settings)
-        if not await self.ping():
+        health = await self.health()
+        if health.status != PluginStatus.READY:
             raise AdapterConnectionError(
-                "Redis connectivity check failed during initialize()",
+                health.message or "Redis connectivity check failed during initialize()",
                 adapter=self._settings.adapter_name,
                 operation="initialize",
             )
@@ -477,10 +434,12 @@ class RedisRepository(Generic[T]):
         """
         BasePort lifecycle entry point — returns a PluginHealth snapshot.
 
-        Wraps ping() rather than duplicating the liveness check. Never raises.
+        The sole connectivity check on this repository — the Redis ``PING``
+        command with a 5-second timeout. Never raises.
         """
-        healthy = await self.ping()
-        return PluginHealth(
-            status=PluginStatus.READY if healthy else PluginStatus.FAILED,
-            message="" if healthy else "ping() returned False",
-        )
+        try:
+            client = await get_redis_client(self._settings)
+            await asyncio.wait_for(client.ping(), timeout=5.0)
+            return PluginHealth(status=PluginStatus.READY, message="")
+        except Exception as exc:  # noqa: BLE001
+            return PluginHealth(status=PluginStatus.FAILED, message=str(exc))

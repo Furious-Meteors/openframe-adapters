@@ -93,7 +93,7 @@ class TestPostgresRepositoryContracts(RepositoryContractTests):
 
         mock_pool.fetchrow = AsyncMock(side_effect=_fetchrow)
         mock_pool.execute = AsyncMock(side_effect=_execute)
-        mock_pool.fetchval = AsyncMock(return_value=1)  # ping / is_ready
+        mock_pool.fetchval = AsyncMock(return_value=1)  # health() connectivity check
         conn = mock_pool.acquire.return_value
         conn.fetch = AsyncMock(side_effect=_conn_fetch)
         conn.fetchval = AsyncMock(side_effect=_conn_fetchval)
