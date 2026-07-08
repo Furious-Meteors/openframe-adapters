@@ -44,6 +44,10 @@ class TestKafkaProducerContracts(ProducerContractTests):
             yield p
 
     @pytest.fixture
+    def port(self, producer):
+        return producer
+
+    @pytest.fixture
     def make_message(self):
         def _make(content: str = "test message") -> dict:
             return {"content": content, "type": "event"}

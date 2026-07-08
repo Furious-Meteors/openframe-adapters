@@ -1,8 +1,8 @@
 """
 openframe/adapters/db/postgres/repository.py
 ==============================================
-Generic PostgreSQL repository implementing ``BaseRepository[T]`` and
-``HealthCheck`` from ``openframe-core`` via structural subtyping.
+Generic PostgreSQL repository implementing ``BaseRepository[T]``
+from ``openframe-core`` via structural subtyping.
 
 The base class works with raw ``dict[str, Any]`` rows. Domain adapters
 subclass it and override ``_row_to_entity()`` / ``_entity_to_row()`` to map
@@ -28,7 +28,6 @@ Usage — typed domain mode (subclass):
 Structural conformance (no inheritance from Protocols required):
 
     assert isinstance(repo, BaseRepository)
-    assert isinstance(repo, HealthCheck)
 """
 from __future__ import annotations
 
@@ -37,8 +36,10 @@ from typing import Any, Generic, TypeVar
 
 import asyncpg
 
+from openframe.core.contracts import Capability, PluginContext, PluginHealth, PluginStatus
 from openframe.core.exceptions import (
     AdapterConfigurationError,
+    AdapterConnectionError,
     AdapterQueryError,
     AdapterTimeoutError,
 )
@@ -55,8 +56,8 @@ class PostgresRepository(Generic[T]):
     """
     Generic PostgreSQL repository.
 
-    Implements ``BaseRepository[T]`` and ``HealthCheck`` structurally — no
-    inheritance from either Protocol. All asyncpg exceptions are caught and
+    Implements ``BaseRepository[T]`` structurally — no
+    inheritance from the Protocol. All asyncpg exceptions are caught and
     re-raised as ``AdapterError`` subclasses. Every operation wraps its
     asyncpg call in ``asyncio.timeout(settings.operation_timeout)``.
 
@@ -76,6 +77,10 @@ class PostgresRepository(Generic[T]):
 
     _table: str = ""
     _id_column: str = "id"
+
+    name:       str = "openframe-postgres-repository"
+    version:    str = "1.3.0"
+    capability: Capability = Capability.PERSISTENCE
 
     def __init__(
         self,
@@ -361,7 +366,7 @@ class PostgresRepository(Generic[T]):
         return status == "DELETE 1"
 
     # ------------------------------------------------------------------
-    # HealthCheck interface
+    # Deprecated health-check methods (use plugin.health() instead)
     # ------------------------------------------------------------------
 
     async def ping(self) -> bool:
@@ -371,6 +376,12 @@ class PostgresRepository(Generic[T]):
         Returns:
             ``True`` if the backend responded, ``False`` on any failure.
             Never raises.
+
+        .. deprecated::
+            Use plugin.health() instead, which returns a PluginHealth snapshot
+            and is the canonical health check in openframe-core v3.0.
+            ping() and is_ready() will be removed in the next major version
+            of this adapter package.
         """
         try:
             pool = await get_postgres_pool(self._settings)
@@ -389,6 +400,12 @@ class PostgresRepository(Generic[T]):
         Returns:
             ``True`` if the database is ready, ``False`` on any failure.
             Never raises.
+
+        .. deprecated::
+            Use plugin.health() instead, which returns a PluginHealth snapshot
+            and is the canonical health check in openframe-core v3.0.
+            ping() and is_ready() will be removed in the next major version
+            of this adapter package.
         """
         try:
             pool = await get_postgres_pool(self._settings)
@@ -417,3 +434,45 @@ class PostgresRepository(Generic[T]):
         if pool is not None:
             await pool.close()
             _pool_cache.pop(self._settings.database_url, None)
+
+    # ------------------------------------------------------------------
+    # BasePort (Identity + Lifecycle) interface
+    # ------------------------------------------------------------------
+
+    async def initialize(self, context: PluginContext) -> None:
+        """
+        Establish the connection pool and verify connectivity.
+
+        BasePort lifecycle entry point. Reuses the same cached pool as
+        every other method on this repository.
+
+        Args:
+            context: Plugin context. Unused — settings are provided at
+                     construction time.
+
+        Raises:
+            AdapterConnectionError: PostgreSQL is unreachable.
+        """
+        await get_postgres_pool(self._settings)
+        if not await self.ping():
+            raise AdapterConnectionError(
+                "PostgreSQL connectivity check failed during initialize()",
+                adapter=self._settings.adapter_name,
+                operation="initialize",
+            )
+
+    async def shutdown(self) -> None:
+        """BasePort lifecycle entry point — alias for close(). Never raises."""
+        await self.close()
+
+    async def health(self) -> PluginHealth:
+        """
+        BasePort lifecycle entry point — returns a PluginHealth snapshot.
+
+        Wraps ping() rather than duplicating the liveness check. Never raises.
+        """
+        healthy = await self.ping()
+        return PluginHealth(
+            status=PluginStatus.READY if healthy else PluginStatus.FAILED,
+            message="" if healthy else "ping() returned False",
+        )

@@ -29,8 +29,8 @@ from __future__ import annotations
 
 import logging
 
+from openframe.core.contracts import BasePort, Capability, PluginContext, PluginHealth, PluginStatus
 from openframe.core.exceptions import AdapterConnectionError
-from openframe.core.plugins import PluginContext, PluginHealth, PluginStatus
 
 from openframe.adapters.db.mongo.config import MongoSettings
 from openframe.adapters.db.mongo.connection import _client_cache, get_mongo_client
@@ -41,7 +41,7 @@ __all__ = ["MongoPlugin"]
 _logger = logging.getLogger(__name__)
 
 
-class MongoPlugin:
+class MongoPlugin(BasePort):
     """
     MongoDB adapter plugin for the OpenFrame plugin registry.
 
@@ -73,8 +73,8 @@ class MongoPlugin:
     """
 
     name:       str = "openframe-mongo"
-    version:    str = "1.2.0"
-    capability: str = "persistence"
+    version:    str = "1.3.0"
+    capability: Capability = Capability.PERSISTENCE
 
     def __init__(
         self,

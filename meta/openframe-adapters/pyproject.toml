@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "openframe-adapters"
-version = "1.2.0"
+version = "1.3.0"
 description = "OpenFrame Microservice Suite - adapter meta-package. Install adapters by name or group."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -39,11 +39,11 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
-postgres   = ["openframe-adapters-db-postgres>=1.2,<2"]
+postgres   = ["openframe-adapters-db-postgres>=1.3,<2"]
 mysql      = ["openframe-adapters-db-mysql>=1.1,<2"]
-redis      = ["openframe-adapters-db-redis>=1.1,<2"]
+redis      = ["openframe-adapters-db-redis>=1.2,<2"]
 dynamodb   = ["openframe-adapters-db-dynamodb>=1.1,<2"]
-mongo      = ["openframe-adapters-db-mongo>=1.2,<2"]
+mongo      = ["openframe-adapters-db-mongo>=1.3,<2"]
 cassandra  = ["openframe-adapters-db-cassandra>=1.1,<2"]
 influxdb   = ["openframe-adapters-db-influxdb>=1.1,<2"]
 milvus     = ["openframe-adapters-db-milvus>=1.1,<2"]
@@ -51,7 +51,7 @@ chromadb   = ["openframe-adapters-db-chromadb>=1.1,<2"]
 qdrant     = ["openframe-adapters-db-qdrant>=1.1,<2"]
 faiss      = ["openframe-adapters-db-faiss>=1.1,<2"]
 falkordb   = ["openframe-adapters-db-falkordb>=1.1,<2"]
-kafka      = ["openframe-adapters-queue-kafka>=1.2,<2"]
+kafka      = ["openframe-adapters-queue-kafka>=1.3,<2"]
 nats       = ["openframe-adapters-queue-nats>=1.1,<2"]
 rabbitmq   = ["openframe-adapters-queue-rabbitmq>=1.1,<2"]
 db = [

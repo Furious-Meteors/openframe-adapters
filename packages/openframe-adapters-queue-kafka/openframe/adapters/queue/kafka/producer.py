@@ -27,6 +27,7 @@ import aiokafka
 import aiokafka.errors
 from aiokafka import AIOKafkaProducer
 
+from openframe.core.contracts import Capability, PluginContext, PluginHealth, PluginStatus
 from openframe.core.exceptions import (
     AdapterConfigurationError,
     AdapterConnectionError,
@@ -34,6 +35,7 @@ from openframe.core.exceptions import (
     AdapterTimeoutError,
 )
 from openframe.core.ports import BaseProducer
+from openframe.core.tracing.propagation import inject as _inject_propagation
 
 from .config import KafkaSettings
 
@@ -41,6 +43,21 @@ __all__ = ["KafkaProducer"]
 
 T = TypeVar("T")
 _logger = logging.getLogger(__name__)
+
+
+def _inject_trace_headers() -> list[tuple[str, bytes]]:
+    """
+    Build Kafka message headers carrying the active W3C traceparent.
+
+    Mirrors ``KafkaConsumer``'s extraction on the other side of this
+    boundary. ``aiokafka`` message headers are ``list[tuple[str, bytes]]``
+    rather than a dict, so the string carrier populated by ``inject()`` is
+    encoded into that shape. A no-op (empty list) when there is no active
+    span or the SDK has not been initialised.
+    """
+    carrier: dict[str, str] = {}
+    _inject_propagation(carrier)
+    return [(k, v.encode("utf-8")) for k, v in carrier.items()]
 
 
 class KafkaProducer(Generic[T]):
@@ -65,6 +82,10 @@ class KafkaProducer(Generic[T]):
 
         assert isinstance(producer, BaseProducer)
     """
+
+    name:       str = "openframe-kafka-producer"
+    version:    str = "1.3.0"
+    capability: Capability = Capability.QUEUE
 
     def __init__(self, settings: KafkaSettings) -> None:
         self._settings = settings
@@ -151,6 +172,29 @@ class KafkaProducer(Generic[T]):
                 self._producer = None
 
     # ------------------------------------------------------------------
+    # BasePort (Identity + Lifecycle) interface
+    # ------------------------------------------------------------------
+
+    async def initialize(self, context: PluginContext) -> None:
+        """BasePort lifecycle entry point — alias for start()."""
+        await self.start()
+
+    async def shutdown(self) -> None:
+        """BasePort lifecycle entry point — alias for close(). Never raises."""
+        await self.close()
+
+    async def health(self) -> PluginHealth:
+        """
+        BasePort lifecycle entry point — returns a PluginHealth snapshot.
+
+        READY when the underlying producer has been started, FAILED
+        otherwise. Never raises.
+        """
+        if self._producer is not None:
+            return PluginHealth(status=PluginStatus.READY, message="")
+        return PluginHealth(status=PluginStatus.FAILED, message="producer not started")
+
+    # ------------------------------------------------------------------
     # BaseProducer[T] interface
     # ------------------------------------------------------------------
 
@@ -177,7 +221,8 @@ class KafkaProducer(Generic[T]):
         try:
             async with asyncio.timeout(self._settings.operation_timeout):
                 await self._producer.send_and_wait(
-                    self._settings.kafka_topic, value
+                    self._settings.kafka_topic, value,
+                    headers=_inject_trace_headers(),
                 )
         except asyncio.TimeoutError as exc:
             raise AdapterTimeoutError(
@@ -219,7 +264,8 @@ class KafkaProducer(Generic[T]):
                 for message in messages:
                     value = self._serialise(message)
                     await self._producer.send_and_wait(
-                        self._settings.kafka_topic, value
+                        self._settings.kafka_topic, value,
+                        headers=_inject_trace_headers(),
                     )
                 await self._producer.flush()
         except asyncio.TimeoutError as exc:

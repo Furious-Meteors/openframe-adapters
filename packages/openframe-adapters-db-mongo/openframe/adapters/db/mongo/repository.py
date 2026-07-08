@@ -1,8 +1,8 @@
 """
 openframe/adapters/db/mongo/repository.py
 ==========================================
-Generic MongoDB document repository implementing ``BaseRepository[T]`` and
-``HealthCheck`` from ``openframe-core`` via structural subtyping.
+Generic MongoDB document repository implementing ``BaseRepository[T]``
+from ``openframe-core`` via structural subtyping.
 
 The base class works with raw ``dict[str, Any]`` documents. Domain adapters
 subclass it and override ``_doc_to_entity()`` / ``_entity_to_doc()`` to map
@@ -40,13 +40,13 @@ import pymongo.errors
 from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorCollection
 
+from openframe.core.contracts import Capability, PluginContext, PluginHealth, PluginStatus
 from openframe.core.exceptions import (
     AdapterConfigurationError,
     AdapterConnectionError,
     AdapterQueryError,
     AdapterTimeoutError,
 )
-from openframe.core.health import HealthCheck
 from openframe.core.ports import BaseRepository
 
 from .config import MongoSettings
@@ -75,8 +75,8 @@ class MongoRepository(Generic[T]):
     """
     Generic MongoDB document repository.
 
-    Implements ``BaseRepository[T]`` and ``HealthCheck`` structurally — no
-    inheritance from either Protocol. All pymongo/motor exceptions are caught
+    Implements ``BaseRepository[T]`` structurally — no
+    inheritance from the Protocol. All pymongo/motor exceptions are caught
     and re-raised as ``AdapterError`` subclasses. Every operation wraps its
     motor call in ``asyncio.timeout(settings.operation_timeout)`` and also
     passes ``max_time_ms`` to the motor method for server-side enforcement.
@@ -94,6 +94,10 @@ class MongoRepository(Generic[T]):
     """
 
     _collection: str = ""
+
+    name:       str = "openframe-mongo-repository"
+    version:    str = "1.3.0"
+    capability: Capability = Capability.PERSISTENCE
 
     def __init__(
         self,
@@ -388,7 +392,7 @@ class MongoRepository(Generic[T]):
         return result.deleted_count == 1
 
     # ------------------------------------------------------------------
-    # HealthCheck interface
+    # Deprecated health-check methods (use plugin.health() instead)
     # ------------------------------------------------------------------
 
     async def ping(self) -> bool:
@@ -398,6 +402,12 @@ class MongoRepository(Generic[T]):
         Returns:
             ``True`` if the backend responded, ``False`` on any failure.
             Never raises.
+
+        .. deprecated::
+            Use plugin.health() instead, which returns a PluginHealth snapshot
+            and is the canonical health check in openframe-core v3.0.
+            ping() and is_ready() will be removed in the next major version
+            of this adapter package.
         """
         try:
             client = get_mongo_client(self._settings)
@@ -420,6 +430,12 @@ class MongoRepository(Generic[T]):
         Returns:
             ``True`` if the database is ready, ``False`` on any failure.
             Never raises.
+
+        .. deprecated::
+            Use plugin.health() instead, which returns a PluginHealth snapshot
+            and is the canonical health check in openframe-core v3.0.
+            ping() and is_ready() will be removed in the next major version
+            of this adapter package.
         """
         try:
             client = get_mongo_client(self._settings)
@@ -447,3 +463,45 @@ class MongoRepository(Generic[T]):
         client = _client_cache.pop(self._settings.mongo_url, None)
         if client is not None:
             client.close()
+
+    # ------------------------------------------------------------------
+    # BasePort (Identity + Lifecycle) interface
+    # ------------------------------------------------------------------
+
+    async def initialize(self, context: PluginContext) -> None:
+        """
+        Establish the Motor client and verify connectivity.
+
+        BasePort lifecycle entry point. Reuses the same cached client as
+        every other method on this repository.
+
+        Args:
+            context: Plugin context. Unused — settings are provided at
+                     construction time.
+
+        Raises:
+            AdapterConnectionError: MongoDB is unreachable.
+        """
+        get_mongo_client(self._settings)
+        if not await self.ping():
+            raise AdapterConnectionError(
+                "MongoDB connectivity check failed during initialize()",
+                adapter=self._settings.adapter_name,
+                operation="initialize",
+            )
+
+    async def shutdown(self) -> None:
+        """BasePort lifecycle entry point — alias for close(). Never raises."""
+        await self.close()
+
+    async def health(self) -> PluginHealth:
+        """
+        BasePort lifecycle entry point — returns a PluginHealth snapshot.
+
+        Wraps ping() rather than duplicating the liveness check. Never raises.
+        """
+        healthy = await self.ping()
+        return PluginHealth(
+            status=PluginStatus.READY if healthy else PluginStatus.FAILED,
+            message="" if healthy else "ping() returned False",
+        )

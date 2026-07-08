@@ -6,7 +6,7 @@ PostgreSQL database adapter for the OpenFrame Microservice Suite.
 Public API:
 
     PostgresSettings    — Pydantic Settings subclass for connection config.
-    PostgresRepository  — Generic async repository (BaseRepository + HealthCheck).
+    PostgresRepository  — Generic async repository (BaseRepository).
     get_postgres_pool   — Async factory that creates / returns the cached pool.
 
 Quick start::

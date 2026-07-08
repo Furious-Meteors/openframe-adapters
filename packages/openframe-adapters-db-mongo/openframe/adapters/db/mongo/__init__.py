@@ -6,7 +6,7 @@ MongoDB document store adapter for the OpenFrame Microservice Suite.
 Public API:
 
     MongoSettings      — Pydantic Settings subclass for connection config.
-    MongoRepository    — Generic async repository (BaseRepository + HealthCheck).
+    MongoRepository    — Generic async repository (BaseRepository).
     get_mongo_client   — Synchronous factory that creates / returns the cached client.
 
 Quick start::

@@ -12,7 +12,6 @@ import pytest
 
 from openframe.adapters.db.postgres import PostgresRepository
 from openframe.core.exceptions import AdapterConfigurationError, AdapterQueryError, AdapterTimeoutError
-from openframe.core.health import HealthCheck
 from openframe.core.ports import BaseRepository
 from openframe.core.testing import RepositoryContractTests
 
@@ -104,6 +103,10 @@ class TestPostgresRepositoryContracts(RepositoryContractTests):
         conn_module._pool_cache.clear()
 
     @pytest.fixture
+    def port(self, repository):
+        return repository
+
+    @pytest.fixture
     def make_entity(self):
         def _make(id: str, name: str = "test") -> dict:
             return {"id": id, "name": name}
@@ -131,9 +134,6 @@ def make_record(data: dict) -> MagicMock:
 class TestProtocolConformance:
     def test_isinstance_base_repository(self, repo: PostgresRepository) -> None:
         assert isinstance(repo, BaseRepository)
-
-    def test_isinstance_health_check(self, repo: PostgresRepository) -> None:
-        assert isinstance(repo, HealthCheck)
 
 
 class TestInit:

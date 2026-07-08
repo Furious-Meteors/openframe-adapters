@@ -8,7 +8,8 @@ from __future__ import annotations
 import pytest
 
 from openframe.adapters.db.postgres import PostgresPlugin, PostgresRepository, PostgresSettings
-from openframe.core.plugins import OpenFramePlugin, PluginContext, PluginStatus
+from openframe.core.contracts import BasePort, PluginContext, PluginStatus
+from openframe.core.testing.contracts import PortContractTests
 
 
 @pytest.fixture
@@ -36,9 +37,9 @@ def plugin_context():
 
 # ── Protocol conformance ───────────────────────────────────────────────────
 
-def test_postgres_plugin_satisfies_openframe_plugin_protocol(plugin):
-    """PostgresPlugin must satisfy the OpenFramePlugin runtime-checkable Protocol."""
-    assert isinstance(plugin, OpenFramePlugin)
+def test_postgres_plugin_satisfies_base_port_protocol(plugin):
+    """PostgresPlugin must satisfy the BasePort runtime-checkable Protocol."""
+    assert isinstance(plugin, BasePort)
 
 
 def test_postgres_plugin_name(plugin):
@@ -46,7 +47,7 @@ def test_postgres_plugin_name(plugin):
 
 
 def test_postgres_plugin_version(plugin):
-    assert plugin.version == "1.2.0"
+    assert plugin.version == "1.3.0"
 
 
 def test_postgres_plugin_capability(plugin):
@@ -242,3 +243,23 @@ async def test_get_repository_returns_subclass_not_base_class(
 
     assert type(plugin.get_repository()) is CustomRepo
     conn_module._pool_cache.clear()
+
+
+# ── Contract tests ─────────────────────────────────────────────────────────
+
+class TestPostgresPluginContracts(PortContractTests):
+    """
+    PostgresPlugin passes the full openframe BasePort contract suite
+    (identity + lifecycle: initialize -> health -> idempotent shutdown).
+    """
+
+    @pytest.fixture
+    def port(self, mock_settings, mock_pool) -> PostgresPlugin:
+        import openframe.adapters.db.postgres.connection as conn_module
+
+        conn_module._pool_cache[mock_settings.database_url] = mock_pool
+        mock_pool.fetchval.return_value = 1  # ping / SELECT 1
+
+        plugin = PostgresPlugin(mock_settings, table="items")
+        yield plugin
+        conn_module._pool_cache.clear()

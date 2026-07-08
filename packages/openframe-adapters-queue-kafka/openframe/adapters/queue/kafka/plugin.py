@@ -37,7 +37,7 @@ from __future__ import annotations
 
 import logging
 
-from openframe.core.plugins import PluginContext, PluginHealth, PluginStatus
+from openframe.core.contracts import BasePort, Capability, PluginContext, PluginHealth, PluginStatus
 
 from openframe.adapters.queue.kafka.config import KafkaSettings
 from openframe.adapters.queue.kafka.consumer import KafkaConsumer
@@ -48,7 +48,7 @@ __all__ = ["KafkaPlugin"]
 _logger = logging.getLogger(__name__)
 
 
-class KafkaPlugin:
+class KafkaPlugin(BasePort):
     """
     Kafka adapter plugin for the OpenFrame plugin registry.
 
@@ -79,8 +79,8 @@ class KafkaPlugin:
     """
 
     name:       str = "openframe-kafka"
-    version:    str = "1.2.0"
-    capability: str = "queue"
+    version:    str = "1.3.0"
+    capability: Capability = Capability.QUEUE
 
     def __init__(
         self,

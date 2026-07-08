@@ -15,7 +15,6 @@ import redis.exceptions
 
 from openframe.adapters.db.redis import RedisRepository, RedisSettings
 from openframe.core.exceptions import AdapterQueryError, AdapterTimeoutError
-from openframe.core.health import HealthCheck
 from openframe.core.ports import BaseRepository
 from openframe.core.testing import RepositoryContractTests
 
@@ -87,6 +86,10 @@ class TestRedisRepositoryContracts(RepositoryContractTests):
         store.clear()
 
     @pytest.fixture
+    def port(self, repository):
+        return repository
+
+    @pytest.fixture
     def make_entity(self):
         def _make(id: str, name: str = "test") -> dict:
             return {"id": id, "name": name}
@@ -98,9 +101,6 @@ class TestRedisRepositoryContracts(RepositoryContractTests):
 class TestProtocolConformance:
     def test_isinstance_base_repository(self, repo: RedisRepository) -> None:
         assert isinstance(repo, BaseRepository)
-
-    def test_isinstance_health_check(self, repo: RedisRepository) -> None:
-        assert isinstance(repo, HealthCheck)
 
 
 class TestMakeKey:

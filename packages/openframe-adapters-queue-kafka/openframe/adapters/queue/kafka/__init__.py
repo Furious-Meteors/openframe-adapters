@@ -8,7 +8,7 @@ Public API::
     KafkaSettings  — Pydantic Settings subclass for connection config.
     KafkaProducer  — Generic async message producer (BaseProducer[T]).
     KafkaConsumer  — Generic async message consumer (BaseConsumer[T]).
-    KafkaPlugin    — OpenFramePlugin implementation for PluginRegistry.
+    KafkaPlugin    — BasePort implementation for PluginRegistry.
 
 Quick start::
 

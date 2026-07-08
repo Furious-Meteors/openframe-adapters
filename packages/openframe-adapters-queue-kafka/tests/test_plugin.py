@@ -15,7 +15,8 @@ from openframe.adapters.queue.kafka import (
     KafkaProducer,
     KafkaSettings,
 )
-from openframe.core.plugins import OpenFramePlugin, PluginContext, PluginStatus
+from openframe.core.contracts import BasePort, PluginContext, PluginStatus
+from openframe.core.testing.contracts import PortContractTests
 
 
 @pytest.fixture
@@ -35,8 +36,8 @@ def plugin_context() -> PluginContext:
 
 # ── Protocol conformance ───────────────────────────────────────────────────
 
-def test_kafka_plugin_satisfies_openframe_plugin_protocol(plugin: KafkaPlugin) -> None:
-    assert isinstance(plugin, OpenFramePlugin)
+def test_kafka_plugin_satisfies_base_port_protocol(plugin: KafkaPlugin) -> None:
+    assert isinstance(plugin, BasePort)
 
 
 def test_kafka_plugin_name(plugin: KafkaPlugin) -> None:
@@ -44,7 +45,7 @@ def test_kafka_plugin_name(plugin: KafkaPlugin) -> None:
 
 
 def test_kafka_plugin_version(plugin: KafkaPlugin) -> None:
-    assert plugin.version == "1.2.0"
+    assert plugin.version == "1.3.0"
 
 
 def test_kafka_plugin_capability(plugin: KafkaPlugin) -> None:
@@ -231,3 +232,21 @@ async def test_get_producer_returns_subclass_not_base_class(
         await plugin.initialize(plugin_context)
 
     assert type(plugin.get_producer()) is CustomProducer
+
+
+# ── Contract tests ─────────────────────────────────────────────────────────
+
+class TestKafkaPluginContracts(PortContractTests):
+    """
+    KafkaPlugin passes the full openframe BasePort contract suite
+    (identity + lifecycle: initialize -> health -> idempotent shutdown).
+    """
+
+    @pytest.fixture
+    def port(self, settings: KafkaSettings, mock_producer_client: MagicMock) -> KafkaPlugin:
+        with patch(
+            "openframe.adapters.queue.kafka.producer.AIOKafkaProducer",
+            return_value=mock_producer_client,
+        ):
+            plugin = KafkaPlugin(settings)
+            yield plugin

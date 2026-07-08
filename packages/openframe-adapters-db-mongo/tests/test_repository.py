@@ -16,7 +16,6 @@ from bson import ObjectId
 
 from openframe.adapters.db.mongo import MongoRepository, MongoSettings
 from openframe.core.exceptions import AdapterConfigurationError, AdapterConnectionError, AdapterQueryError, AdapterTimeoutError
-from openframe.core.health import HealthCheck
 from openframe.core.ports import BaseRepository
 from openframe.core.testing import RepositoryContractTests
 
@@ -136,6 +135,10 @@ class TestMongoRepositoryContracts(RepositoryContractTests):
         store.clear()
 
     @pytest.fixture
+    def port(self, repository):
+        return repository
+
+    @pytest.fixture
     def make_entity(self):
         # Return the Mongo-native entity format (with both _id and id) so that
         # assert result == entity passes after _serialise_doc adds the id mirror.
@@ -162,9 +165,6 @@ def make_doc(data: dict) -> dict:
 class TestProtocolConformance:
     def test_isinstance_base_repository(self, repo: MongoRepository) -> None:
         assert isinstance(repo, BaseRepository)
-
-    def test_isinstance_health_check(self, repo: MongoRepository) -> None:
-        assert isinstance(repo, HealthCheck)
 
 
 class TestInit:

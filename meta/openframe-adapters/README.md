@@ -142,8 +142,8 @@ _registry: PluginRegistry | None = None
 async def initialise() -> None:
     global _registry
     _registry = PluginRegistry()
-    _registry.register(PostgresPlugin(PostgresSettings()))  # capability: "persistence"
-    _registry.register(RedisPlugin(RedisSettings()))        # capability: "cache"
+    _registry.register(PostgresPlugin(PostgresSettings()))  # capability: Capability.PERSISTENCE
+    _registry.register(RedisPlugin(RedisSettings()))        # capability: Capability.CACHE
     await _registry.initialize_all()   # fails fast if any backend unreachable
 
 async def shutdown() -> None:
@@ -187,20 +187,35 @@ app.add_middleware(TelemetryMiddleware)
 
 ### Plugin capabilities
 
-Every `*Plugin` class declares a `capability` string. This is the key used
-by `registry.get()`. The capability taxonomy is a convention across the entire
-OpenFrame ecosystem — use these exact strings:
+Every `*Plugin` class declares a `capability` attribute — a typed
+`openframe.core.contracts.Capability` enum member (not a raw string as of
+`openframe-core` v3.0). This is the key used by `registry.get()`:
+
+```python
+from openframe.core.contracts import Capability
+
+registry.get(Capability.PERSISTENCE)  # → PostgresPlugin / MongoPlugin
+registry.get(Capability.CACHE)        # → RedisPlugin
+```
+
+The capability taxonomy is a closed enum shared across the entire OpenFrame
+ecosystem:
 
 | Capability | Adapters | Use for |
 |---|---|---|
-| `"persistence"` | Postgres, Mongo, MySQL, DynamoDB, Cassandra | Primary data store |
-| `"cache"` | Redis | Fast ephemeral store, sessions, rate limits |
-| `"queue"` | Kafka, NATS, RabbitMQ | Message publishing and consumption |
-| `"vector"` | Milvus, Qdrant, ChromaDB, FAISS, FalkorDB | Vector similarity search |
-| `"timeseries"` | InfluxDB | Time-series metrics and events |
+| `Capability.PERSISTENCE` | Postgres, Mongo, MySQL, DynamoDB, Cassandra | Primary data store |
+| `Capability.CACHE` | Redis | Fast ephemeral store, sessions, rate limits |
+| `Capability.QUEUE` | Kafka, NATS, RabbitMQ | Message publishing and consumption |
+| `Capability.SEARCH` | Milvus, Qdrant, ChromaDB, FAISS, FalkorDB | Vector similarity search |
 
-Using a different string for the same category breaks `registry.get()` across
-services. Always use the strings from this table.
+The closed `Capability` enum (`openframe.core.contracts.Capability`) has no
+dedicated time-series member as of core v3.0 — InfluxDB and other
+time-series adapters do not yet have an assigned capability in this
+taxonomy.
+
+`Capability` also compares equal to its string value (e.g.
+`Capability.PERSISTENCE == "persistence"`), so existing string comparisons
+keep working, but new code should key on the enum member directly.
 
 ### The env-var swap exception
 
@@ -261,8 +276,12 @@ page in the `openframe-core` documentation.
 
 [`openframe-core`](https://pypi.org/project/openframe-core/) is installed
 automatically as a transitive dependency — you never need to declare it
-separately. Every individual adapter package pins `openframe-core>=1.0,<2`,
-so installing any extra brings core in as part of the resolution.
+separately. As of this release, `postgres`, `mongo`, `redis`, and `kafka`
+pin `openframe-core>=3.0,<4` (the ADR-006 unified port/lifecycle contract
+layer — `BasePort`, typed `Capability`, `openframe.core.contracts`). Other
+adapter packages in this meta-package may still be on an older `core` pin
+until they are migrated; check each package's own `pyproject.toml` for its
+exact range.
 
 ---
 

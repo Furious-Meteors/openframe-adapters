@@ -1,8 +1,8 @@
 """
 openframe/adapters/db/redis/repository.py
 ==========================================
-Generic Redis key-value repository implementing ``BaseRepository[T]`` and
-``HealthCheck`` from ``openframe-core`` via structural subtyping.
+Generic Redis key-value repository implementing ``BaseRepository[T]``
+from ``openframe-core`` via structural subtyping.
 
 The base class works with raw ``dict[str, Any]`` values. Domain adapters
 subclass it and override ``_entity_to_dict()`` and ``_dict_to_entity()`` to
@@ -30,12 +30,12 @@ from typing import Any, Generic, TypeVar
 
 import redis.exceptions
 
+from openframe.core.contracts import Capability, PluginContext, PluginHealth, PluginStatus
 from openframe.core.exceptions import (
     AdapterConnectionError,
     AdapterQueryError,
     AdapterTimeoutError,
 )
-from openframe.core.health import HealthCheck
 from openframe.core.ports import BaseRepository
 
 from .config import RedisSettings
@@ -50,8 +50,8 @@ class RedisRepository(Generic[T]):
     """
     Generic Redis key-value repository.
 
-    Implements ``BaseRepository[T]`` and ``HealthCheck`` structurally — no
-    inheritance from either Protocol. All Redis exceptions are caught and
+    Implements ``BaseRepository[T]`` structurally — no
+    inheritance from the Protocol. All Redis exceptions are caught and
     re-raised as ``AdapterError`` subclasses. Every operation wraps its
     Redis command in ``asyncio.timeout(settings.operation_timeout)``.
 
@@ -77,8 +77,11 @@ class RedisRepository(Generic[T]):
     Structural conformance::
 
         assert isinstance(repo, BaseRepository)
-        assert isinstance(repo, HealthCheck)
     """
+
+    name:       str = "openframe-redis-repository"
+    version:    str = "1.2.0"
+    capability: Capability = Capability.CACHE
 
     def __init__(self, settings: RedisSettings) -> None:
         self._settings = settings
@@ -378,7 +381,7 @@ class RedisRepository(Generic[T]):
         return deleted > 0
 
     # ------------------------------------------------------------------
-    # HealthCheck interface
+    # Deprecated health-check methods (use plugin.health() instead)
     # ------------------------------------------------------------------
 
     async def ping(self) -> bool:
@@ -388,6 +391,12 @@ class RedisRepository(Generic[T]):
         Returns:
             ``True`` if the backend responded, ``False`` on any failure.
             Never raises.
+
+        .. deprecated::
+            Use plugin.health() instead, which returns a PluginHealth snapshot
+            and is the canonical health check in openframe-core v3.0.
+            ping() and is_ready() will be removed in the next major version
+            of this adapter package.
         """
         try:
             client = await get_redis_client(self._settings)
@@ -405,6 +414,12 @@ class RedisRepository(Generic[T]):
             ``True`` if ``"redis_version"`` is present in the INFO response,
             ``False`` on any failure.
             Never raises.
+
+        .. deprecated::
+            Use plugin.health() instead, which returns a PluginHealth snapshot
+            and is the canonical health check in openframe-core v3.0.
+            ping() and is_ready() will be removed in the next major version
+            of this adapter package.
         """
         try:
             client = await get_redis_client(self._settings)
@@ -427,3 +442,45 @@ class RedisRepository(Generic[T]):
         client = _client_cache.pop(self._settings.redis_url, None)
         if client is not None:
             await client.aclose()
+
+    # ------------------------------------------------------------------
+    # BasePort (Identity + Lifecycle) interface
+    # ------------------------------------------------------------------
+
+    async def initialize(self, context: PluginContext) -> None:
+        """
+        Establish the Redis client and verify connectivity.
+
+        BasePort lifecycle entry point. Reuses the same cached client as
+        every other method on this repository.
+
+        Args:
+            context: Plugin context. Unused — settings are provided at
+                     construction time.
+
+        Raises:
+            AdapterConnectionError: Redis is unreachable.
+        """
+        await get_redis_client(self._settings)
+        if not await self.ping():
+            raise AdapterConnectionError(
+                "Redis connectivity check failed during initialize()",
+                adapter=self._settings.adapter_name,
+                operation="initialize",
+            )
+
+    async def shutdown(self) -> None:
+        """BasePort lifecycle entry point — alias for close(). Never raises."""
+        await self.close()
+
+    async def health(self) -> PluginHealth:
+        """
+        BasePort lifecycle entry point — returns a PluginHealth snapshot.
+
+        Wraps ping() rather than duplicating the liveness check. Never raises.
+        """
+        healthy = await self.ping()
+        return PluginHealth(
+            status=PluginStatus.READY if healthy else PluginStatus.FAILED,
+            message="" if healthy else "ping() returned False",
+        )

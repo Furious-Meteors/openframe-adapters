@@ -10,7 +10,7 @@ Postgres server is needed.
 """
 from __future__ import annotations
 
-# Canonical OTel reset fixtures from openframe-core v2.0.
+# Canonical OTel reset fixtures from openframe-core v3.0.
 # Provides (autouse): reset_telemetry_state
 # Provides (on-demand): span_exporter, metric_reader
 from openframe.core.testing.fixtures import *  # noqa: F401, F403

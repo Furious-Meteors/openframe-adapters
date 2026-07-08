@@ -48,6 +48,10 @@ class TestKafkaConsumerContracts(ConsumerContractTests):
             yield KafkaConsumer(mock_settings)
 
     @pytest.fixture
+    def port(self, consumer):
+        return consumer
+
+    @pytest.fixture
     def make_message(self):
         def _make(content: str = "test") -> dict:
             return {"content": content, "type": "event"}

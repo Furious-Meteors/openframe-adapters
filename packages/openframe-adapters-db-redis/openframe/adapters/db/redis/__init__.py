@@ -6,9 +6,9 @@ Redis key-value adapter for the OpenFrame Microservice Suite.
 Public API::
 
     RedisSettings      — Pydantic Settings subclass for connection config.
-    RedisRepository    — Generic async repository (BaseRepository + HealthCheck).
+    RedisRepository    — Generic async repository (BaseRepository).
     get_redis_client   — Async factory that creates / returns the cached client.
-    RedisPlugin        — OpenFramePlugin implementation for PluginRegistry.
+    RedisPlugin        — BasePort implementation for PluginRegistry.
 
 Quick start::
 

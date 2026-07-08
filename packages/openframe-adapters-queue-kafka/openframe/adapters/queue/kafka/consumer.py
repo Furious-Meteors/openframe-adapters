@@ -36,12 +36,13 @@ import aiokafka.errors
 from aiokafka import AIOKafkaConsumer
 
 from opentelemetry import context as otel_context
-from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 
+from openframe.core.contracts import Capability, PluginContext, PluginHealth, PluginStatus
 from openframe.core.exceptions import (
     AdapterConfigurationError,
     AdapterConnectionError,
 )
+from openframe.core.tracing.propagation import extract as _extract_propagation
 
 from .config import KafkaSettings
 
@@ -49,22 +50,6 @@ __all__ = ["KafkaConsumer"]
 
 T = TypeVar("T")
 _logger = logging.getLogger(__name__)
-_propagator = TraceContextTextMapPropagator()
-
-
-def _extract_trace_context(headers: list[tuple[str, bytes]]) -> otel_context.Context:
-    """
-    Extract a W3C traceparent (if present) from a Kafka message's headers.
-
-    Mirrors ``KafkaProducer._inject_trace_headers`` on the other side of
-    this boundary. ``aiokafka`` message headers are ``list[tuple[str, bytes]]``
-    rather than a dict, so they're decoded into the str->str carrier shape
-    the propagator expects. If no traceparent header is present, ``extract``
-    returns the current (empty) context unchanged — safe no-op, identical
-    to today's behaviour.
-    """
-    carrier = {k: v.decode("utf-8") for k, v in (headers or [])}
-    return _propagator.extract(carrier)
 
 
 class KafkaConsumer(Generic[T]):
@@ -92,10 +77,15 @@ class KafkaConsumer(Generic[T]):
         assert isinstance(consumer, BaseConsumer)
     """
 
+    name:       str = "openframe-kafka-consumer"
+    version:    str = "1.3.0"
+    capability: Capability = Capability.QUEUE
+
     def __init__(self, settings: KafkaSettings) -> None:
         self._settings = settings
         self._consumer: AIOKafkaConsumer | None = None
         self._running: bool = False
+        self._initialized: bool = False
 
     # ------------------------------------------------------------------
     # Deserialisation (override in typed subclasses)
@@ -176,7 +166,8 @@ class KafkaConsumer(Generic[T]):
                     break
                 try:
                     message = self._deserialise(msg.value)
-                    parent_ctx = _extract_trace_context(msg.headers)
+                    carrier = {k: v.decode("utf-8") for k, v in (msg.headers or [])}
+                    parent_ctx = _extract_propagation(carrier)
                     token = otel_context.attach(parent_ctx)
                     try:
                         await handler(message)
@@ -245,3 +236,33 @@ class KafkaConsumer(Generic[T]):
             except Exception as exc:  # noqa: BLE001
                 _logger.error("KafkaConsumer close error (ignored): %s", exc)
             self._consumer = None
+
+    # ------------------------------------------------------------------
+    # BasePort (Identity + Lifecycle) interface
+    # ------------------------------------------------------------------
+
+    async def initialize(self, context: PluginContext) -> None:
+        """
+        BasePort lifecycle entry point.
+
+        Each ``subscribe()`` call constructs and starts its own
+        ``AIOKafkaConsumer`` (consumers are short-lived per session), so
+        there is no persistent connection to establish here — this simply
+        marks the consumer as ready for use.
+        """
+        self._initialized = True
+
+    async def shutdown(self) -> None:
+        """BasePort lifecycle entry point — alias for close(). Never raises."""
+        self._initialized = False
+        await self.close()
+
+    async def health(self) -> PluginHealth:
+        """
+        BasePort lifecycle entry point — returns a PluginHealth snapshot.
+
+        Never raises.
+        """
+        if self._initialized:
+            return PluginHealth(status=PluginStatus.READY, message="")
+        return PluginHealth(status=PluginStatus.FAILED, message="not initialized")

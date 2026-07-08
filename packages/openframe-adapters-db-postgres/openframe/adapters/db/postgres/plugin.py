@@ -29,8 +29,8 @@ from __future__ import annotations
 
 import logging
 
+from openframe.core.contracts import BasePort, Capability, PluginContext, PluginHealth, PluginStatus
 from openframe.core.exceptions import AdapterConnectionError
-from openframe.core.plugins import PluginContext, PluginHealth, PluginStatus
 
 from openframe.adapters.db.postgres.config import PostgresSettings
 from openframe.adapters.db.postgres.connection import _pool_cache, get_postgres_pool
@@ -41,7 +41,7 @@ __all__ = ["PostgresPlugin"]
 _logger = logging.getLogger(__name__)
 
 
-class PostgresPlugin:
+class PostgresPlugin(BasePort):
     """
     PostgreSQL adapter plugin for the OpenFrame plugin registry.
 
@@ -71,8 +71,8 @@ class PostgresPlugin:
     """
 
     name:       str = "openframe-postgres"
-    version:    str = "1.2.0"
-    capability: str = "persistence"
+    version:    str = "1.3.0"
+    capability: Capability = Capability.PERSISTENCE
 
     def __init__(
         self,

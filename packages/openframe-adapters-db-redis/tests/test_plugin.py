@@ -8,7 +8,8 @@ from __future__ import annotations
 import pytest
 
 from openframe.adapters.db.redis import RedisPlugin, RedisRepository, RedisSettings
-from openframe.core.plugins import OpenFramePlugin, PluginContext, PluginStatus
+from openframe.core.contracts import BasePort, PluginContext, PluginStatus
+from openframe.core.testing.contracts import PortContractTests
 
 
 @pytest.fixture
@@ -34,9 +35,9 @@ def plugin_context() -> PluginContext:
 
 # ── Protocol conformance ───────────────────────────────────────────────────
 
-def test_redis_plugin_satisfies_openframe_plugin_protocol(plugin: RedisPlugin) -> None:
-    """RedisPlugin must satisfy the OpenFramePlugin runtime-checkable Protocol."""
-    assert isinstance(plugin, OpenFramePlugin)
+def test_redis_plugin_satisfies_base_port_protocol(plugin: RedisPlugin) -> None:
+    """RedisPlugin must satisfy the BasePort runtime-checkable Protocol."""
+    assert isinstance(plugin, BasePort)
 
 
 def test_redis_plugin_name(plugin: RedisPlugin) -> None:
@@ -44,7 +45,7 @@ def test_redis_plugin_name(plugin: RedisPlugin) -> None:
 
 
 def test_redis_plugin_version(plugin: RedisPlugin) -> None:
-    assert plugin.version == "1.1.0"
+    assert plugin.version == "1.2.0"
 
 
 def test_redis_plugin_capability(plugin: RedisPlugin) -> None:
@@ -191,3 +192,22 @@ async def test_health_returns_failed_when_ping_raises(
     assert result is not None
     assert result.status == PluginStatus.FAILED
     conn_module._client_cache.clear()
+
+
+# ── Contract tests ─────────────────────────────────────────────────────────
+
+class TestRedisPluginContracts(PortContractTests):
+    """
+    RedisPlugin passes the full openframe BasePort contract suite
+    (identity + lifecycle: initialize -> health -> idempotent shutdown).
+    """
+
+    @pytest.fixture
+    def port(self, mock_settings: RedisSettings, mock_redis: object) -> RedisPlugin:
+        import openframe.adapters.db.redis.connection as conn_module
+
+        conn_module._client_cache[mock_settings.redis_url] = mock_redis  # type: ignore[arg-type]
+
+        plugin = RedisPlugin(mock_settings)
+        yield plugin
+        conn_module._client_cache.clear()

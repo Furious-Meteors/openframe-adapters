@@ -19,9 +19,9 @@
 
 ---
 
-`openframe-adapters` is the database and queue adapter family of the OpenFrame Microservice Development Suite. Each adapter implements the `BaseRepository[T]` and `HealthCheck` contracts from `openframe-core`, handles connection lifecycle and error translation, and gets out of the way — giving you direct access to the underlying driver for anything the port contract does not cover.
+`openframe-adapters` is the database and queue adapter family of the OpenFrame Microservice Development Suite. Each adapter implements the `BaseRepository[T]` / `BaseProducer[T]` / `BaseConsumer[T]` port contracts from `openframe-core` — which, as of core v3.0 (ADR-006), each extend the unified `BasePort` (`Identity` + `Lifecycle`) contract — handles connection lifecycle and error translation, and gets out of the way — giving you direct access to the underlying driver for anything the port contract does not cover.
 
-All packages pin `openframe-core>=1.0,<2`. The major version is the stability contract.
+`postgres`, `mongo`, `redis`, and `kafka` pin `openframe-core>=3.0,<4` as of this release; other adapters in this family may still be on an earlier major until migrated — check each package's own `pyproject.toml`. The major version is the stability contract.
 
 ---
 
@@ -229,16 +229,35 @@ await consumer.subscribe("events", handler=handle)
 
 ### Health checks — built into every adapter
 
+As of `openframe-core` v3.0 (ADR-006), the canonical health check lives on
+`health()`, part of the unified `BasePort` (`Identity` + `Lifecycle`)
+contract every `*Plugin` and repository/producer/consumer now satisfies. It
+returns a single `PluginHealth` snapshot instead of a `ping()`/`is_ready()`
+pair, and never raises:
+
+```python
+from openframe.adapters.db.postgres import PostgresPlugin, PostgresSettings
+from openframe.core.contracts import BasePort, PluginContext, PluginHealth
+
+plugin = PostgresPlugin(PostgresSettings(), table="items")
+assert isinstance(plugin, BasePort)   # True — Identity + Lifecycle
+
+await plugin.initialize(PluginContext(config={}, plugin_name=plugin.name))
+health: PluginHealth = await plugin.health()   # never raises
+```
+
+`repo.ping()` / `repo.is_ready()` still work on every repository — kept for
+backward compatibility — but are **deprecated** in favor of `health()` and
+will be removed in the next major version of each adapter package.
+
 ```python
 from openframe.adapters.db.postgres import PostgresRepository, PostgresSettings
-from openframe.core.health import HealthCheck
 
 repo = PostgresRepository(PostgresSettings(), table="items", id_column="id")
 
-assert isinstance(repo, HealthCheck)   # True — every adapter implements this
-
-await repo.ping()      # cheap liveness — SELECT 1
-await repo.is_ready()  # full readiness — schema check, pool health
+await repo.ping()      # deprecated — cheap liveness, SELECT 1
+await repo.is_ready()  # deprecated — full readiness, schema check
+await repo.health()    # preferred — returns PluginHealth, never raises
 ```
 
 ---
