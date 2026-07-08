@@ -8,13 +8,14 @@ Stability: beta
 Usage via PluginRegistry (optional)::
 
     from openframe.core.plugins import PluginRegistry
+    from openframe.core.ports import Capability
     from openframe.adapters.db.postgres import PostgresPlugin, PostgresSettings
 
     registry = PluginRegistry()
     registry.register(PostgresPlugin(PostgresSettings()))
     await registry.initialize_all()
 
-    plugin = registry.get("persistence")
+    plugin = registry.get(Capability.PERSISTENCE)
     repo = plugin.get_repository()
 
 Usage via deps.py (unchanged, no plugin needed)::

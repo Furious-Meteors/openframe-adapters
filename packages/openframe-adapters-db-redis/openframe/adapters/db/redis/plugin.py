@@ -10,19 +10,20 @@ Redis is the cache layer in the ``rest-min`` bundle.
 Postgres is ``"persistence"``. Both can coexist in the same ``PluginRegistry``
 because they expose different capabilities::
 
-    registry.get("persistence")  # → PostgresPlugin
-    registry.get("cache")        # → RedisPlugin
+    registry.get(Capability.PERSISTENCE)  # → PostgresPlugin
+    registry.get(Capability.CACHE)        # → RedisPlugin
 
 Usage via PluginRegistry (optional)::
 
     from openframe.core.plugins import PluginRegistry
+    from openframe.core.ports import Capability
     from openframe.adapters.db.redis import RedisPlugin, RedisSettings
 
     registry = PluginRegistry()
     registry.register(RedisPlugin(RedisSettings()))
     await registry.initialize_all()
 
-    plugin = registry.get("cache")
+    plugin = registry.get(Capability.CACHE)
     repo = plugin.get_repository()
 
 Usage via deps.py (unchanged, no plugin needed)::

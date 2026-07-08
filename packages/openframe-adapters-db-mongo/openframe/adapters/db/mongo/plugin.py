@@ -9,13 +9,14 @@ Capability: "persistence"
 Usage via PluginRegistry (optional)::
 
     from openframe.core.plugins import PluginRegistry
+    from openframe.core.ports import Capability
     from openframe.adapters.db.mongo import MongoPlugin, MongoSettings
 
     registry = PluginRegistry()
     registry.register(MongoPlugin(MongoSettings(), collection="documents"))
     await registry.initialize_all()
 
-    plugin = registry.get("persistence")
+    plugin = registry.get(Capability.PERSISTENCE)
     repo = plugin.get_repository()
 
 Usage via deps.py (unchanged, no plugin needed)::
@@ -69,7 +70,7 @@ class MongoPlugin(BasePort):
             collection="artifacts",
             repository_class=ArtifactMongoRepository,
         ))
-        # registry.get("persistence").get_repository() now returns
+        # registry.get(Capability.PERSISTENCE).get_repository() now returns
         # an ArtifactMongoRepository instance, not a plain MongoRepository.
     """
 

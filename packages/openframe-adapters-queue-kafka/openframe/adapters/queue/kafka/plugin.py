@@ -12,13 +12,14 @@ via ``make_consumer()`` since each consume session is short-lived.
 Usage via PluginRegistry (optional)::
 
     from openframe.core.plugins import PluginRegistry
+    from openframe.core.ports import Capability
     from openframe.adapters.queue.kafka import KafkaPlugin, KafkaSettings
 
     registry = PluginRegistry()
     registry.register(KafkaPlugin(KafkaSettings()))
     await registry.initialize_all()
 
-    plugin = registry.get("queue")
+    plugin = registry.get(Capability.QUEUE)
     producer = plugin.get_producer()
     await producer.publish({"event": "item.created"})
 
