@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "openframe-adapters"
-version = "2.0.0"
+version = "2.0.1"
 description = "OpenFrame Microservice Suite - adapter meta-package. Install adapters by name or group."
 readme = "README.md"
 requires-python = ">=3.11"
