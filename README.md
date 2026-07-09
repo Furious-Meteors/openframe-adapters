@@ -5,7 +5,7 @@
 <p align="center">
   <a href="https://pypi.org/project/openframe-adapters/"><img src="https://img.shields.io/pypi/v/openframe-adapters?color=6DB33F&labelColor=1a1a1a&label=PyPI" alt="PyPI version"/></a>
   <a href="https://pypi.org/project/openframe-adapters/"><img src="https://img.shields.io/pypi/pyversions/openframe-adapters?color=6DB33F&labelColor=1a1a1a" alt="Python versions"/></a>
-  <a href="https://github.com/Furious-Meteors/openframe-adapters/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Furious-Meteors/openframe-adapters/ci.yml?branch=production&color=6DB33F&labelColor=1a1a1a&label=tests" alt="Tests"/></a>
+  <a href="https://github.com/Furious-Meteors/openframe-adapters/actions/workflows/app-test.yml"><img src="https://img.shields.io/github/actions/workflow/status/Furious-Meteors/openframe-adapters/app-test.yml?branch=production&color=6DB33F&labelColor=1a1a1a&label=tests" alt="Tests"/></a>
   <a href="https://github.com/Furious-Meteors/openframe-adapters/blob/production/LICENSE"><img src="https://img.shields.io/badge/license-MIT-6DB33F?labelColor=1a1a1a" alt="License"/></a>
   <a href="https://furious-meteors.github.io/openframe-adapters/"><img src="https://img.shields.io/badge/docs-live-6DB33F?labelColor=1a1a1a" alt="Docs"/></a>
 </p>
