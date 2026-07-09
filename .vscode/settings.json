@@ -1,0 +1,7 @@
+{
+  "python.defaultInterpreterPath": "/Users/apandey/miniconda3/bin/python",
+  "python.analysis.extraPaths": [
+    "packages/openframe-adapters-db-mongo",
+    "packages/openframe-adapters-db-postgres"
+  ]
+}
