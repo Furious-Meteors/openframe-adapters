@@ -8,8 +8,13 @@ on:
   workflow_dispatch:
 
 jobs:
+  test:
+    name: Run test suite
+    uses: ./.github/workflows/app-test.yml
+
   release:
     name: Release ${{ matrix.package }}
+    needs: test
     runs-on: ubuntu-latest
 
     strategy:
@@ -35,18 +40,6 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-
-      # ── Test ──────────────────────────────────────────────────────────────
-      - name: Test
-        working-directory: ${{ matrix.package }}
-        run: |
-          if [ -d "tests" ]; then
-            python -m pip install --upgrade pip
-            pip install -e ".[dev]"
-            python -m pytest tests/ -v --tb=short
-          else
-            echo "No tests/ directory — test phase skipped for this package."
-          fi
 
       # ── Build ─────────────────────────────────────────────────────────────
       - name: Build
