@@ -1,3 +1,39 @@
+## [redis 2.0.3 / kafka 1.4.3] - 2026-07-08
+
+### Added
+- `RedisPlugin(settings, repository_class=RedisRepository)` — new
+  `repository_class` parameter, mirroring `PostgresPlugin`/`MongoPlugin`.
+  `get_repository()` now returns the domain subclass passed in rather
+  than always constructing the plain base `RedisRepository`.
+- `KafkaPlugin(..., consumer_class=KafkaConsumer)` — new `consumer_class`
+  parameter, mirroring the existing `producer_class` pattern.
+  `make_consumer()` now returns the configured subclass rather than
+  always constructing a plain `KafkaConsumer`.
+
+Both gaps surfaced during the `ApplicationBootstrap` migration of all 7
+validation framework services. Additive-only — default behaviour for
+callers that don't pass the new parameter is unchanged.
+
+### Other
+- Meta package (`openframe-adapters`) bumped to `2.0.2`.
+- `.github/workflows/auto-docs.yml` disabled (renamed to `.disabled`) —
+  `docs/` has no `mkdocs.yml` or markdown content yet, so the build step
+  had nothing to build.
+
+## [postgres 2.0.2 / mongo 2.0.2 / redis 2.0.2 / kafka 1.4.2] - 2026-07-08
+
+### Changed
+- Docstring cleanup only — no logic, test, or public API changes.
+- Fixed 7 raw-string `registry.get("persistence"|"cache"|"queue")`
+  examples across all four `plugin.py` docstrings to use the typed
+  `registry.get(Capability.X)` form, with the matching
+  `from openframe.core.ports import Capability` import shown in each
+  example.
+- Replaced the stale "`ping()` and `is_ready()` were removed in v2.0;
+  use `health()`" sentence in the three DB `repository.py` class
+  docstrings with a clean description of what `health()` returns —
+  the migration is complete and the sentence had no remaining audience.
+
 ## [postgres 2.0.1 / mongo 2.0.1 / redis 2.0.1 / kafka 1.4.1] - 2026-07-08
 
 ### Changed

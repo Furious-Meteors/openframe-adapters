@@ -186,6 +186,23 @@ app = FastAPI(lifespan=lifespan)
 app.add_middleware(TelemetryMiddleware)
 ```
 
+### Domain subclass registration
+
+Every `*Plugin` supports registering a domain-specific subclass instead of
+the plain base adapter class — `repository_class` (Postgres, Mongo, Redis),
+`producer_class` and `consumer_class` (Kafka):
+
+```python
+registry.register(PostgresPlugin(PostgresSettings(), table="items", repository_class=ItemRepository))
+registry.register(RedisPlugin(RedisSettings(), repository_class=SessionRepository))
+registry.register(KafkaPlugin(KafkaSettings(), producer_class=ArtifactEventProducer, consumer_class=OrderEventConsumer))
+```
+
+`get_repository()` / `get_producer()` / `make_consumer()` then return an
+instance of the subclass you passed in, not the plain base class — so
+overridden entity mapping (`_doc_to_entity`, `_entity_to_doc`, `_serialise`,
+`_deserialise`, etc.) is preserved end-to-end through the registry.
+
 ### Plugin capabilities
 
 Every `*Plugin` class declares a `capability` attribute — a typed
