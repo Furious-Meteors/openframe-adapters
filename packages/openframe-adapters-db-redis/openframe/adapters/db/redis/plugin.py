@@ -65,14 +65,48 @@ class RedisPlugin(BasePort):
 
     The plugin exposes get_repository() after initialization for use
     in the composition root or ApplicationBootstrap.
+
+    By default constructs a plain RedisRepository. To use a domain-specific
+    subclass, pass it via repository_class::
+
+        # With a domain-specific subclass:
+        registry.register(RedisPlugin(
+            RedisSettings(),
+            repository_class=SessionRedisRepository,
+        ))
     """
 
     name:       str = "openframe-redis"
-    version:    str = "2.0.1"
+    version:    str = "2.0.3"
     capability: Capability = Capability.CACHE
 
-    def __init__(self, settings: RedisSettings) -> None:
+    def __init__(
+        self,
+        settings: RedisSettings,
+        repository_class: type[RedisRepository] = RedisRepository,
+    ) -> None:
+        """
+        Args:
+            settings:         RedisSettings instance.
+            repository_class: The RedisRepository subclass to construct.
+                              Defaults to the base RedisRepository. Pass a
+                              domain-specific subclass here to get proper
+                              _serialise()/_deserialise() overrides through
+                              get_repository().
+
+        Raises:
+            TypeError: repository_class is not a subclass of RedisRepository.
+        """
+        if not (
+            isinstance(repository_class, type)
+            and issubclass(repository_class, RedisRepository)
+        ):
+            raise TypeError(
+                f"repository_class must be a subclass of RedisRepository, "
+                f"got {repository_class!r}"
+            )
         self._settings = settings
+        self._repository_class = repository_class
         self._repo: RedisRepository | None = None
         self._status = PluginStatus.REGISTERED
 
@@ -92,7 +126,7 @@ class RedisPlugin(BasePort):
         self._status = PluginStatus.INITIALIZED
         try:
             await get_redis_client(self._settings)
-            self._repo = RedisRepository(self._settings)
+            self._repo = self._repository_class(self._settings)
             health = await self._repo.health()
             if health.status != PluginStatus.READY:
                 raise AdapterConnectionError(
@@ -102,8 +136,9 @@ class RedisPlugin(BasePort):
                 ) from None
             self._status = PluginStatus.READY
             _logger.info(
-                "RedisPlugin initialized — %s",
+                "RedisPlugin initialized — %s (repository_class=%s)",
                 self._settings.redis_url.split("@")[-1],
+                self._repository_class.__name__,
             )
         except Exception:
             self._status = PluginStatus.FAILED

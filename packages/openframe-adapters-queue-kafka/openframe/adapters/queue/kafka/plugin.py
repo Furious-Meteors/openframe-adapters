@@ -74,19 +74,27 @@ class KafkaPlugin(BasePort):
             producer_class=ArtifactEventProducer,
         ))
 
-    Note: ``make_consumer()`` always constructs a base ``KafkaConsumer``.
-    Consumer subclass support is a follow-up — applications that need a
-    domain-specific consumer should construct it directly.
+    ``make_consumer()`` similarly honours ``consumer_class`` — pass a
+    domain-specific subclass (e.g. one that overrides _deserialise) to
+    have it constructed for you instead of building it manually::
+
+        # With both custom producer and consumer subclasses:
+        plugin = KafkaPlugin(
+            KafkaSettings(),
+            producer_class=ArtifactEventProducer,
+            consumer_class=OrderEventConsumer,
+        )
     """
 
     name:       str = "openframe-kafka"
-    version:    str = "1.4.1"
+    version:    str = "1.4.3"
     capability: Capability = Capability.QUEUE
 
     def __init__(
         self,
         settings: KafkaSettings,
         producer_class: type[KafkaProducer] = KafkaProducer,
+        consumer_class: type[KafkaConsumer] = KafkaConsumer,
     ) -> None:
         """
         Args:
@@ -95,17 +103,30 @@ class KafkaPlugin(BasePort):
                             Defaults to the base KafkaProducer. Pass a
                             domain-specific subclass here to get proper
                             _serialise() overrides through get_producer().
+            consumer_class: The KafkaConsumer subclass to construct via
+                            make_consumer(). Defaults to the base
+                            KafkaConsumer. Pass a domain-specific subclass
+                            here to get proper _deserialise() overrides
+                            without constructing the consumer manually
+                            outside the plugin.
 
         Raises:
             TypeError: producer_class is not a subclass of KafkaProducer.
+            TypeError: consumer_class is not a subclass of KafkaConsumer.
         """
         if not (isinstance(producer_class, type) and issubclass(producer_class, KafkaProducer)):
             raise TypeError(
                 f"producer_class must be a subclass of KafkaProducer, "
                 f"got {producer_class!r}"
             )
+        if not (isinstance(consumer_class, type) and issubclass(consumer_class, KafkaConsumer)):
+            raise TypeError(
+                f"consumer_class must be a subclass of KafkaConsumer, "
+                f"got {consumer_class!r}"
+            )
         self._settings = settings
         self._producer_class = producer_class
+        self._consumer_class = consumer_class
         self._producer: KafkaProducer | None = None
         self._status = PluginStatus.REGISTERED
 
@@ -128,9 +149,10 @@ class KafkaPlugin(BasePort):
             await self._producer.start()
             self._status = PluginStatus.READY
             _logger.info(
-                "KafkaPlugin initialized — %s (producer_class=%s)",
+                "KafkaPlugin initialized — %s (producer_class=%s, consumer_class=%s)",
                 self._settings.kafka_bootstrap_servers,
                 self._producer_class.__name__,
+                self._consumer_class.__name__,
             )
         except Exception:
             self._status = PluginStatus.FAILED
@@ -189,12 +211,18 @@ class KafkaPlugin(BasePort):
 
     def make_consumer(self) -> KafkaConsumer:
         """
-        Create a new ``KafkaConsumer`` with this plugin's settings.
+        Create a new consumer with this plugin's settings.
+
+        Uses the ``consumer_class`` passed at construction time, so
+        domain subclasses that override ``_deserialise()`` are returned
+        correctly without constructing the consumer manually outside
+        the plugin.
 
         Consumers are short-lived (one per ``subscribe()`` session) so
         they are created on demand rather than cached.
 
         Returns:
-            A fresh ``KafkaConsumer`` ready to call ``subscribe()`` on.
+            A fresh instance of the configured ``consumer_class``,
+            ready to call ``subscribe()`` on.
         """
-        return KafkaConsumer(self._settings)
+        return self._consumer_class(self._settings)

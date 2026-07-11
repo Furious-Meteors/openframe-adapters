@@ -1,5 +1,10 @@
 name: Auto Docs
 
+# DISABLED: renamed to *.disabled so GitHub Actions won't pick it up.
+# docs/ currently has no mkdocs.yml and no markdown content (assets only),
+# so `mkdocs build --strict` has nothing to build. Rename back to
+# `auto-docs.yml` once real docs content + mkdocs.yml are added.
+#
 # Deploy docs to GitHub Pages on every push to production.
 # On PRs to dev or production, only build (validate) — do not deploy.
 on:

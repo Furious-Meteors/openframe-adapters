@@ -47,7 +47,7 @@ def test_redis_plugin_name(plugin: RedisPlugin) -> None:
 
 
 def test_redis_plugin_version(plugin: RedisPlugin) -> None:
-    assert plugin.version == "2.0.1"
+    assert plugin.version == "2.0.3"
 
 
 def test_redis_plugin_capability(plugin: RedisPlugin) -> None:
@@ -239,3 +239,48 @@ class TestRedisPluginContracts(PortContractTests):
         plugin = RedisPlugin(mock_settings)
         yield plugin
         conn_module._client_cache.clear()
+
+
+# ── repository_class parameter ─────────────────────────────────────────────
+
+def test_plugin_defaults_to_base_repository_class(settings: RedisSettings) -> None:
+    """No repository_class passed → _repository_class is RedisRepository."""
+    plugin = RedisPlugin(settings)
+    assert plugin._repository_class is RedisRepository
+
+
+def test_plugin_accepts_custom_repository_class(settings: RedisSettings) -> None:
+    """Custom repository_class subclass is stored without error."""
+    class _TestRepo(RedisRepository):
+        pass
+
+    plugin = RedisPlugin(settings, repository_class=_TestRepo)
+    assert plugin._repository_class is _TestRepo
+
+
+def test_plugin_rejects_non_repository_class(settings: RedisSettings) -> None:
+    """Non-subclass raises TypeError with a clear message."""
+    with pytest.raises(TypeError, match="must be a subclass of RedisRepository"):
+        RedisPlugin(settings, repository_class=object)  # type: ignore[arg-type]
+
+
+async def test_get_repository_returns_subclass_not_base_class(
+    settings: RedisSettings,
+    plugin_context: PluginContext,
+    mock_redis: object,
+    mock_settings: RedisSettings,
+) -> None:
+    """get_repository() returns the domain subclass, not base."""
+    class _DomainRepo(RedisRepository):
+        pass
+
+    import openframe.adapters.db.redis.connection as conn_module
+    conn_module._client_cache[mock_settings.redis_url] = mock_redis  # type: ignore[arg-type]
+
+    plugin = RedisPlugin(mock_settings, repository_class=_DomainRepo)
+    await plugin.initialize(plugin_context)
+
+    repo = plugin.get_repository()
+    assert isinstance(repo, _DomainRepo)
+    assert type(repo) is _DomainRepo
+    conn_module._client_cache.clear()

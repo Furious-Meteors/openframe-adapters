@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "openframe-adapters-db-redis"
-version = "2.0.2"
+version = "2.0.3"
 description = "OpenFrame Microservice Suite - Redis key-value adapter."
 readme = "README.md"
 requires-python = ">=3.11"

@@ -45,7 +45,7 @@ def test_kafka_plugin_name(plugin: KafkaPlugin) -> None:
 
 
 def test_kafka_plugin_version(plugin: KafkaPlugin) -> None:
-    assert plugin.version == "1.4.1"
+    assert plugin.version == "1.4.3"
 
 
 def test_kafka_plugin_capability(plugin: KafkaPlugin) -> None:
@@ -250,3 +250,43 @@ class TestKafkaPluginContracts(PortContractTests):
         ):
             plugin = KafkaPlugin(settings)
             yield plugin
+
+
+# ── consumer_class parameter ───────────────────────────────────────────────
+
+def test_plugin_defaults_to_base_consumer_class(settings: KafkaSettings) -> None:
+    """No consumer_class passed → _consumer_class is KafkaConsumer."""
+    plugin = KafkaPlugin(settings)
+    assert plugin._consumer_class is KafkaConsumer
+
+
+def test_plugin_accepts_custom_consumer_class(settings: KafkaSettings) -> None:
+    """Custom consumer_class subclass is stored without error."""
+    class _TestConsumer(KafkaConsumer):
+        pass
+
+    plugin = KafkaPlugin(settings, consumer_class=_TestConsumer)
+    assert plugin._consumer_class is _TestConsumer
+
+
+def test_plugin_rejects_non_consumer_class(settings: KafkaSettings) -> None:
+    """Non-subclass raises TypeError with a clear message."""
+    with pytest.raises(TypeError, match="must be a subclass of KafkaConsumer"):
+        KafkaPlugin(settings, consumer_class=object)  # type: ignore[arg-type]
+
+
+def test_make_consumer_returns_subclass_not_base_class(settings: KafkaSettings) -> None:
+    """
+    make_consumer() returns the configured subclass.
+
+    Does NOT require initialize() — make_consumer() constructs on demand
+    with no broker connection.
+    """
+    class _DomainConsumer(KafkaConsumer):
+        pass
+
+    plugin = KafkaPlugin(settings, consumer_class=_DomainConsumer)
+    consumer = plugin.make_consumer()
+
+    assert isinstance(consumer, _DomainConsumer)
+    assert type(consumer) is _DomainConsumer
