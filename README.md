@@ -23,7 +23,7 @@
 
 `postgres`, `mongo`, `redis`, and `kafka` pin `openframe-core>=3.0,<4` as of this release; other adapters in this family may still be on an earlier major until migrated — check each package's own `pyproject.toml`. The major version is the stability contract.
 
-`openframe-adapters-db-postgres`/`-mongo` are at **2.0.2**, `-redis` is at **2.0.3** — `ping()`/`is_ready()` (deprecated, then removed in `2.0.0`) are gone; `health()` is the sole health check. `openframe-adapters-queue-kafka` is at **1.4.3** (non-breaking throughout).
+`openframe-adapters-db-postgres`/`-mongo` are at **2.0.3**, `-redis` is at **2.0.4** — `ping()`/`is_ready()` (deprecated, then removed in `2.0.0`) are gone; `health()` is the sole health check. `openframe-adapters-queue-kafka` is at **1.4.4** (non-breaking throughout). All four now require `openframe-core>=3.3` and wire through `ApplicationBootstrap.compose()` — see [Wiring with ApplicationBootstrap](#wiring-with-applicationbootstrap) below.
 
 Every `*Plugin` now supports domain subclass registration consistently: `repository_class` (Postgres, Mongo, Redis), `producer_class` and `consumer_class` (Kafka) — pass a subclass that overrides entity mapping/serialisation and `get_repository()`/`get_producer()`/`make_consumer()` return it, not the plain base class.
 
