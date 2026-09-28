@@ -338,30 +338,42 @@ Adapter-specific variables — see each package's documentation:
 
 ---
 
-## Wiring in deps.py
+## Wiring with ApplicationBootstrap
 
-Every OpenFrame template wires adapters the same way — settings from env, repository constructed, wrapped with `TracingProxy` for automatic OTel spans:
+Every OpenFrame template wires adapters the same way — through `openframe-core`'s `ApplicationBootstrap` (requires `openframe-core>=3.3`), which manages the full `BasePort` lifecycle (`initialize()`/`health()`/`shutdown()`) and flushes telemetry on shutdown. For a single adapter, `ApplicationBootstrap.compose()` needs no subclass:
 
 ```python
 # src/deps.py
-from functools import lru_cache
 from openframe.adapters.db.postgres import PostgresRepository, PostgresSettings
+from openframe.core.runtime import ApplicationBootstrap
+from openframe.core.ports import Capability
 from openframe.core.tracing import TracingProxy
 
-@lru_cache(maxsize=1)
-def _get_settings() -> PostgresSettings:
-    return PostgresSettings()   # raises ValidationError at startup if env vars missing
-
-@lru_cache(maxsize=1)
-def _get_repository() -> PostgresRepository:
-    return PostgresRepository(_get_settings(), table="items", id_column="id")
+_settings = PostgresSettings()   # raises ValidationError at startup if env vars missing
+_repo = PostgresRepository(_settings, table="items", id_column="id")
+app = ApplicationBootstrap.compose(_repo)
 
 def get_repository() -> TracingProxy:
-    return TracingProxy(_get_repository(), prefix="repository.item")
+    return TracingProxy(app.get(Capability.PERSISTENCE), prefix="repository.item")
     # Every call to get_repository().get(...) now creates span "repository.item.get"
 ```
 
-Swap the adapter — change two lines in `deps.py`, update one env var. Zero changes to business logic.
+```python
+# src/main.py — FastAPI lifespan
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from src.deps import app as bootstrap
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await bootstrap.start()   # calls repo.initialize() — pool/client created, connectivity verified
+    yield
+    await bootstrap.stop()    # repo.shutdown() then telemetry flush — nothing silently dropped
+
+app = FastAPI(lifespan=lifespan)
+```
+
+Swap the adapter — change two lines in `deps.py`, update one env var. Zero changes to business logic. `compose()` also accepts several ports at once (`ApplicationBootstrap.compose(repo, cache, producer)`) for a multi-adapter service; reach for a `configure()` subclass instead once an adapter needs its own `config=`/`init_timeout=`, or registration order that depends on a runtime condition — see `openframe-core`'s [Choosing a Wiring Pattern](https://github.com/Furious-Meteors/openframe-core/blob/production/docs/developer-guide/how-it-works.md#choosing-a-wiring-pattern) guide.
 
 ---
 
