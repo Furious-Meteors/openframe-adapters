@@ -24,7 +24,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "openframe-core>=3.0,<4",
+    "openframe-core>=3.3,<4",
     "aiokafka>=0.11",
 ]
 

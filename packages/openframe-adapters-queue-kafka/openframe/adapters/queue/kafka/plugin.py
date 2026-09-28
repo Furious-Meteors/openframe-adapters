@@ -9,24 +9,28 @@ Capability: "queue"
 Manages the ``KafkaProducer`` lifecycle. Consumers are created on-demand
 via ``make_consumer()`` since each consume session is short-lived.
 
-Usage via PluginRegistry (optional)::
+Recommended usage — ApplicationBootstrap.compose() (requires openframe-core>=3.3)::
 
-    from openframe.core.plugins import PluginRegistry
+    from openframe.core.runtime import ApplicationBootstrap
     from openframe.core.ports import Capability
     from openframe.adapters.queue.kafka import KafkaPlugin, KafkaSettings
 
-    registry = PluginRegistry()
-    registry.register(KafkaPlugin(KafkaSettings()))
-    await registry.initialize_all()
+    async with ApplicationBootstrap.compose(KafkaPlugin(KafkaSettings())) as app:
+        plugin = app.get(Capability.QUEUE)
+        producer = plugin.get_producer()
+        await producer.publish({"event": "item.created"})
 
-    plugin = registry.get(Capability.QUEUE)
-    producer = plugin.get_producer()
-    await producer.publish({"event": "item.created"})
+        consumer = plugin.make_consumer()
+        await consumer.subscribe(handler)
 
-    consumer = plugin.make_consumer()
-    await consumer.subscribe(handler)
+Reach for a subclassed ``ApplicationBootstrap`` with ``configure()`` instead
+of ``compose()`` once this plugin needs its own ``config=``/``init_timeout=``,
+or registration order that depends on a runtime condition. For what neither
+tier covers (e.g. ``get_all()`` for an intentional multi-port-per-capability
+setup — separate producer-only/consumer-only plugin instances), use
+``app.registry`` — the underlying ``PluginRegistry``.
 
-Usage via deps.py (unchanged, no plugin needed)::
+No lifecycle needed (tests/scripts) — construct the producer directly::
 
     producer = KafkaProducer(KafkaSettings())
     await producer.start()

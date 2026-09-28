@@ -13,7 +13,7 @@ Part of the [`openframe-adapters`](https://github.com/Furious-Meteors/openframe-
 | `KafkaSettings` | Pydantic-settings subclass — reads all config from env vars |
 | `KafkaProducer[T]` | Generic async message producer — `BaseProducer[T]` |
 | `KafkaConsumer[T]` | Generic async message consumer — `BaseConsumer[T]` |
-| `KafkaPlugin` | `OpenFramePlugin` — structured lifecycle via `PluginRegistry` |
+| `KafkaPlugin` | `BasePort` (Identity + Lifecycle) — structured lifecycle via `PluginRegistry`/`ApplicationBootstrap` |
 
 ## Installation
 
@@ -88,21 +88,34 @@ class OrderConsumer(KafkaConsumer[OrderEvent]):
 
 ## Plugin lifecycle (optional)
 
+`KafkaPlugin` is a `BasePort` — wire it up with `ApplicationBootstrap.compose()`,
+the recommended zero-subclass entry point:
+
 ```python
-from openframe.core.plugins import PluginRegistry
+from openframe.core.runtime import ApplicationBootstrap
+from openframe.core.ports import Capability
 from openframe.adapters.queue.kafka import KafkaPlugin, KafkaSettings
 
-registry = PluginRegistry()
-registry.register(KafkaPlugin(KafkaSettings()))
-await registry.initialize_all()
+kafka = KafkaPlugin(KafkaSettings())
 
-plugin = registry.get("queue")
-producer = plugin.get_producer()
-await producer.publish({"event": "item.created"})
+async with ApplicationBootstrap.compose(kafka) as app:
+    plugin = app.get(Capability.QUEUE)
+    producer = plugin.get_producer()
+    await producer.publish({"event": "item.created"})
 
-consumer = plugin.make_consumer()
-await consumer.subscribe(handler)
+    consumer = plugin.make_consumer()
+    await consumer.subscribe(handler)
 ```
+
+`KafkaPlugin` doubles as both the producer and consumer port for the `QUEUE`
+capability (`get_producer()` / `make_consumer()`), so a single instance is
+usually enough. If a service registers a separate producer-only and
+consumer-only `KafkaPlugin` (e.g. different topics/settings for each), pass
+both to `compose()`: `ApplicationBootstrap.compose(producer_plugin,
+consumer_plugin)`. Reach for a subclassed `ApplicationBootstrap` with
+`configure()` only when you need per-port `config=`/`init_timeout=` or
+conditional registration order, and use `app.registry` as an escape hatch
+for anything neither tier covers.
 
 ## Consumer acknowledgement semantics
 
