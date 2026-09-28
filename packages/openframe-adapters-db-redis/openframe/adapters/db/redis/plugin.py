@@ -13,20 +13,22 @@ because they expose different capabilities::
     registry.get(Capability.PERSISTENCE)  # → PostgresPlugin
     registry.get(Capability.CACHE)        # → RedisPlugin
 
-Usage via PluginRegistry (optional)::
+Recommended usage — ApplicationBootstrap.compose() (requires openframe-core>=3.3)::
 
-    from openframe.core.plugins import PluginRegistry
+    from openframe.core.runtime import ApplicationBootstrap
     from openframe.core.ports import Capability
     from openframe.adapters.db.redis import RedisPlugin, RedisSettings
 
-    registry = PluginRegistry()
-    registry.register(RedisPlugin(RedisSettings()))
-    await registry.initialize_all()
+    async with ApplicationBootstrap.compose(RedisPlugin(RedisSettings())) as app:
+        repo = app.get(Capability.CACHE).get_repository()
 
-    plugin = registry.get(Capability.CACHE)
-    repo = plugin.get_repository()
+Reach for a subclassed ``ApplicationBootstrap`` with ``configure()`` instead
+of ``compose()`` once this plugin needs its own ``config=``/``init_timeout=``,
+or registration order that depends on a runtime condition. For what neither
+tier covers (e.g. ``get_all()`` for an intentional multi-port-per-capability
+setup), use ``app.registry`` — the underlying ``PluginRegistry``.
 
-Usage via deps.py (unchanged, no plugin needed)::
+No lifecycle needed (tests/scripts) — construct the repository directly::
 
     repo = RedisRepository(RedisSettings())
 """

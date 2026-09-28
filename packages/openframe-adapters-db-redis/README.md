@@ -13,7 +13,7 @@ Part of the [`openframe-adapters`](https://github.com/Furious-Meteors/openframe-
 | `RedisSettings` | Pydantic-settings subclass — reads all config from env vars |
 | `RedisRepository[T]` | Generic async repository — `BaseRepository[T]` + `HealthCheck` |
 | `get_redis_client()` | Async factory — creates and caches the `redis.asyncio.Redis` client |
-| `RedisPlugin` | `OpenFramePlugin` — structured lifecycle via `PluginRegistry` |
+| `RedisPlugin` | `BasePort` (Identity + Lifecycle) — registered via `PluginRegistry`/`ApplicationBootstrap` |
 
 ## Installation
 
@@ -73,16 +73,19 @@ class SessionRepository(RedisRepository[Session]):
 ## Plugin lifecycle (optional)
 
 ```python
-from openframe.core.plugins import PluginRegistry
+from openframe.core.runtime import ApplicationBootstrap
+from openframe.core.ports import Capability
 from openframe.adapters.db.redis import RedisPlugin, RedisSettings
 
-registry = PluginRegistry()
-registry.register(RedisPlugin(RedisSettings()))
-await registry.initialize_all()
-
-plugin = registry.get("cache")          # capability = "cache"
-repo = plugin.get_repository()
+async with ApplicationBootstrap.compose(RedisPlugin(RedisSettings())) as app:
+    repo = app.get(Capability.CACHE)
 ```
+
+`ApplicationBootstrap.compose()` is the recommended entry point for wiring
+one or a few ports — no `config=`/`init_timeout=` boilerplate needed. Reach
+for a `configure()` subclass only when you need per-port config/timeouts or
+conditional registration order, and for `app.registry` (the underlying
+`PluginRegistry`) only for what neither tier covers.
 
 ## License
 
