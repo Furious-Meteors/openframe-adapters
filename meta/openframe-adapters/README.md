@@ -272,6 +272,24 @@ subclass → `.registry` escape hatch), lifespan wiring, and architecture
 diagrams — see [How It Works § Choosing a Wiring Pattern](https://furious-meteors.github.io/openframe-core/developer-guide/how-it-works/#choosing-a-wiring-pattern)
 in the `openframe-core` documentation.
 
+### Resilience — circuit breaking under sustained failure
+
+`openframe-core>=3.4` ships `openframe.core.resilience.CircuitBreakerProxy` — wrap a repository/producer to short-circuit calls after repeated failures instead of blocking every caller until `operation_timeout` during a sustained outage:
+
+```python
+from openframe.core.resilience import CircuitBreakerProxy
+from openframe.core.tracing import TracingProxy
+
+repo = CircuitBreakerProxy(
+    TracingProxy(app.get(Capability.PERSISTENCE).get_repository(), prefix="repository.item"),
+    failure_threshold=5,
+    reset_timeout=30.0,
+)
+```
+
+Wrap the traced repository, not the reverse — a short-circuited call never
+reaches the adapter, so it shouldn't produce a misleading adapter span.
+
 ---
 
 ## Package inventory
@@ -305,11 +323,11 @@ in the `openframe-core` documentation.
 [`openframe-core`](https://pypi.org/project/openframe-core/) is installed
 automatically as a transitive dependency — you never need to declare it
 separately. As of this release, `postgres`, `mongo`, `redis`, and `kafka`
-pin `openframe-core>=3.0,<4` (the ADR-006 unified port/lifecycle contract
-layer — `BasePort`, typed `Capability`, `openframe.core.ports`). Other
-adapter packages in this meta-package may still be on an older `core` pin
-until they are migrated; check each package's own `pyproject.toml` for its
-exact range.
+pin `openframe-core>=3.3,<4` (v3.3.0 added `ApplicationBootstrap.compose()`/
+`get_all()`/`registry`, which every package's own wiring documentation now
+uses as the default example). Other adapter packages in this meta-package
+may still be on an older `core` pin until they are migrated; check each
+package's own `pyproject.toml` for its exact range.
 
 ---
 
