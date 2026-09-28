@@ -1,3 +1,69 @@
+## [postgres 2.0.3 / mongo 2.0.3 / redis 2.0.4 / kafka 1.4.4] - 2026-09-28
+
+### Fixed
+- `PostgresRepository` (postgres only) — `get`/`list`/`create`/`update`/`delete`
+  no longer misclassify a connection lost mid-query as `AdapterQueryError`.
+  Added a `_wrap_asyncpg()` helper (mirroring `MongoRepository`'s/
+  `RedisRepository`'s existing connection-vs-query distinction) that
+  correctly raises retryable `AdapterConnectionError` for
+  `ConnectionDoesNotExistError`/`ConnectionFailureError`/`InterfaceError`/
+  `TooManyConnectionsError`. `PostgresRepository.version` bumped `1.3.0`
+  → `1.3.1` to reflect the logic change (package version tracks the
+  package as a whole; this class's own `version` attribute tracks the
+  last version its own logic changed, per existing convention).
+- Two stale `OpenFramePlugin` references (redis, kafka `README.md`) —
+  `OpenFramePlugin` was deleted from `openframe-core` in v3.0.0 (ADR-006:
+  "a plugin is just a registered `BasePort`"); corrected to describe
+  `RedisPlugin`/`KafkaPlugin` as `BasePort` (Identity + Lifecycle)
+  implementations instead.
+- Broken `.../developer-guide/composition-root/` doc link (all four
+  `plugin.py` module-level comments, plus the meta package's own
+  `README.md`) — the actual `openframe-core` guide lives at
+  `developer-guide/how-it-works/#choosing-a-wiring-pattern`; corrected.
+
+### Changed
+- **Adopted `openframe-core` v3.3.0's `ApplicationBootstrap.compose()`
+  wiring convention across all four packages and the meta package**,
+  replacing `PluginRegistry` direct construction and `deps.py`+`lru_cache`
+  examples — both are no longer documented as peer alternatives upstream
+  (see `openframe-core`'s own v3.3.0 changelog: "Add ApplicationBootstrap.compose()/get_all()/registry").
+  - Added or rewrote a wiring example in every package's `README.md` and
+    every `plugin.py` module docstring, based on each package's `*Plugin`
+    class (not the raw repository/producer), showing real
+    `initialize()`/`health()`/`shutdown()` lifecycle via
+    `async with ApplicationBootstrap.compose(...) as app:`.
+  - Meta package `README.md`'s "Wiring adapters into your service"
+    section — the most substantial rewrite: replaced the entire
+    "Stage 1 (`lru_cache`) → Stage 2 (`PluginRegistry`)" upgrade-path
+    model with the "`compose()` → `configure()` subclass → `.registry`
+    escape hatch" model. Also fixed 4 examples using raw string capability
+    keys (`registry.get("persistence")`, `registry.get("cache")`) instead
+    of the typed `Capability` enum members those examples were otherwise
+    demonstrating correctly elsewhere in the same file — a real,
+    independent bug in the example code, not just wiring-pattern
+    staleness.
+  - Top-level `README.md`'s "Wiring in deps.py" section retitled and
+    rewritten to the same convention.
+- **Dependency floor**: all four packages' `openframe-core` pin tightened
+  from `>=3.0,<4` to `>=3.3,<4`, since each package's own docs now show a
+  `compose()` example that requires 3.3+. Verified meaningful (not just
+  cosmetic) by confirming `compose`/`get_all`/`registry` genuinely don't
+  exist on `openframe-core==3.2.1` before re-testing against a local
+  3.3.0 install.
+- Meta package (`openframe-adapters`) bumped to `2.0.3` — no dependency
+  version pins changed (extras still pin sub-packages by major range,
+  e.g. `openframe-adapters-db-postgres>=2.0,<3`, which already covers the
+  2.0.3 patch releases above), bumped for its own substantial `README.md`
+  rewrite.
+
+### Verification
+- All four packages reinstalled against a local editable `openframe-core`
+  3.3.0 build (not yet on the package index) to confirm the new examples
+  actually work, not just read correctly. Full suite re-run after every
+  change: **383 tests passed** (94 postgres + 109 mongo + 85 redis + 95
+  kafka), zero failures, across the version bump, the docstring fixes, and
+  the meta README rewrite.
+
 ## [redis 2.0.3 / kafka 1.4.3] - 2026-07-08
 
 ### Added
