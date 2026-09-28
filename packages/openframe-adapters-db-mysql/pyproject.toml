@@ -1,0 +1,45 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "openframe-adapters-db-mysql"
+version = "0.1.0"
+description = "OpenFrame Microservice Suite — MySQL database adapter."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+keywords = ["openframe", "mysql", "aiomysql", "hexagonal", "microservice"]
+dependencies = [
+    "openframe-core>=3.3,<4",
+    "aiomysql>=0.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "pytest-mock>=3.14",
+]
+
+[[project.authors]]
+name = "Furious Meteors Engineering"
+email = "engineering@furiousmeteors.dev"
+
+[[project.maintainers]]
+name = "Furious Meteors Engineering"
+email = "engineering@furiousmeteors.dev"
+
+[project.urls]
+Homepage      = "https://github.com/Furious-Meteors/openframe-adapters"
+Documentation = "https://furious-meteors.github.io/openframe-adapters/"
+Repository    = "https://github.com/Furious-Meteors/openframe-adapters"
+Changelog     = "https://github.com/Furious-Meteors/openframe-adapters/blob/production/.github/CHANGELOG.md"
+"Bug Tracker" = "https://github.com/Furious-Meteors/openframe-adapters/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["openframe"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

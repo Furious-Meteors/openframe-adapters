@@ -36,7 +36,9 @@ Every `*Plugin` now supports domain subclass registration consistently: `reposit
 ```bash
 # Relational
 pip install openframe-adapters[postgres]
+pip install openframe-adapters[cockroachdb]
 pip install openframe-adapters[mysql]
+pip install openframe-adapters[mariadb]
 
 # Key-value
 pip install openframe-adapters[redis]
@@ -67,7 +69,7 @@ pip install openframe-adapters[rabbitmq]
 ### Group — one category
 
 ```bash
-pip install openframe-adapters[db]        # all 7 DB adapters (relational + document + columnar + time-series)
+pip install openframe-adapters[db]        # all 9 DB adapters (relational + document + columnar + time-series)
 pip install openframe-adapters[vector]    # milvus + chromadb + qdrant + faiss + falkordb
 pip install openframe-adapters[queue]     # kafka + nats + rabbitmq
 ```
@@ -83,7 +85,7 @@ pip install openframe-adapters[research-min]  # mongo + redis — Research Vault
 ### Everything
 
 ```bash
-pip install openframe-adapters[all]       # all 15 adapter packages
+pip install openframe-adapters[all]       # all 17 adapter packages
 ```
 
 ---
@@ -93,7 +95,9 @@ pip install openframe-adapters[all]       # all 15 adapter packages
 | Extra | Package | Driver | Async | Category |
 |---|---|---|---|---|
 | `[postgres]` | `openframe-adapters-db-postgres` | asyncpg | native | Relational |
+| `[cockroachdb]` | `openframe-adapters-db-cockroachdb` | asyncpg | native | Relational |
 | `[mysql]` | `openframe-adapters-db-mysql` | aiomysql | native | Relational |
+| `[mariadb]` | `openframe-adapters-db-mariadb` | aiomysql | native | Relational |
 | `[redis]` | `openframe-adapters-db-redis` | redis-py | native | Key-value |
 | `[dynamodb]` | `openframe-adapters-db-dynamodb` | aioboto3 | wrapper | Key-value |
 | `[mongo]` | `openframe-adapters-db-mongo` | motor | native | Document |

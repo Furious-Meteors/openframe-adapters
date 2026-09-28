@@ -13,7 +13,9 @@ A metadata-only package that provides named install shortcuts for the entire
 ```bash
 # Relational
 pip install openframe-adapters[postgres]    # PostgreSQL via asyncpg
+pip install openframe-adapters[cockroachdb] # CockroachDB via asyncpg
 pip install openframe-adapters[mysql]       # MySQL via aiomysql
+pip install openframe-adapters[mariadb]     # MariaDB via aiomysql
 
 # Key-value
 pip install openframe-adapters[redis]       # Redis via redis-py
@@ -44,7 +46,7 @@ pip install openframe-adapters[rabbitmq]    # RabbitMQ via aio-pika
 ### Groups — one category
 
 ```bash
-pip install openframe-adapters[db]       # all 7 DB adapters (relational + document + specialist)
+pip install openframe-adapters[db]       # all 9 DB adapters (relational + document + specialist)
 pip install openframe-adapters[vector]   # all 5 vector DB adapters
 pip install openframe-adapters[queue]    # all 3 queue adapters
 ```
@@ -52,7 +54,7 @@ pip install openframe-adapters[queue]    # all 3 queue adapters
 ### Everything
 
 ```bash
-pip install openframe-adapters[all]      # all 15 individual adapter packages
+pip install openframe-adapters[all]      # all 17 individual adapter packages
 ```
 
 ### Convenience combinations
@@ -297,7 +299,9 @@ reaches the adapter, so it shouldn't produce a misleading adapter span.
 | Extra | `pip install` | Package installed | Async driver |
 |---|---|---|---|
 | `postgres` | `openframe-adapters[postgres]` | `openframe-adapters-db-postgres` | `asyncpg` |
+| `cockroachdb` | `openframe-adapters[cockroachdb]` | `openframe-adapters-db-cockroachdb` | `asyncpg` |
 | `mysql` | `openframe-adapters[mysql]` | `openframe-adapters-db-mysql` | `aiomysql` |
+| `mariadb` | `openframe-adapters[mariadb]` | `openframe-adapters-db-mariadb` | `aiomysql` |
 | `redis` | `openframe-adapters[redis]` | `openframe-adapters-db-redis` | `redis-py` (asyncio) |
 | `dynamodb` | `openframe-adapters[dynamodb]` | `openframe-adapters-db-dynamodb` | `aiobotocore` |
 | `mongo` | `openframe-adapters[mongo]` | `openframe-adapters-db-mongo` | `Motor` |
@@ -311,10 +315,10 @@ reaches the adapter, so it shouldn't produce a misleading adapter span.
 | `kafka` | `openframe-adapters[kafka]` | `openframe-adapters-queue-kafka` | `aiokafka` |
 | `nats` | `openframe-adapters[nats]` | `openframe-adapters-queue-nats` | `nats-py` |
 | `rabbitmq` | `openframe-adapters[rabbitmq]` | `openframe-adapters-queue-rabbitmq` | `aio-pika` |
-| `db` | `openframe-adapters[db]` | all 7 DB adapters above | — |
+| `db` | `openframe-adapters[db]` | all 9 DB adapters above | — |
 | `vector` | `openframe-adapters[vector]` | all 5 vector adapters above | — |
 | `queue` | `openframe-adapters[queue]` | all 3 queue adapters above | — |
-| `all` | `openframe-adapters[all]` | all 15 adapter packages | — |
+| `all` | `openframe-adapters[all]` | all 17 adapter packages | — |
 
 ---
 

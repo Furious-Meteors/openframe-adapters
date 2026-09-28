@@ -28,6 +28,9 @@ jobs:
           - openframe-adapters-db-postgres
           - openframe-adapters-db-mongo
           - openframe-adapters-db-redis
+          - openframe-adapters-db-cockroachdb
+          - openframe-adapters-db-mysql
+          - openframe-adapters-db-mariadb
           - openframe-adapters-queue-kafka
           - openframe-adapters-queue-nats
           - openframe-adapters-queue-rabbitmq

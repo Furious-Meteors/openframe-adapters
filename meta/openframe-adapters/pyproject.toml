@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "openframe-adapters"
-version = "2.1.0"
+version = "2.2.0"
 description = "OpenFrame Microservice Suite - adapter meta-package. Install adapters by name or group."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -41,7 +41,9 @@ dependencies = []
 
 [project.optional-dependencies]
 postgres   = ["openframe-adapters-db-postgres>=2.0,<3"]
-mysql      = ["openframe-adapters-db-mysql>=1.1,<2"]
+cockroachdb = ["openframe-adapters-db-cockroachdb>=0.1,<1"]
+mysql      = ["openframe-adapters-db-mysql>=0.1,<1"]
+mariadb    = ["openframe-adapters-db-mariadb>=0.1,<1"]
 redis      = ["openframe-adapters-db-redis>=2.0,<3"]
 dynamodb   = ["openframe-adapters-db-dynamodb>=1.1,<2"]
 mongo      = ["openframe-adapters-db-mongo>=2.0,<3"]
@@ -57,7 +59,9 @@ nats       = ["openframe-adapters-queue-nats>=0.1,<1"]
 rabbitmq   = ["openframe-adapters-queue-rabbitmq>=0.1,<1"]
 db = [
     "openframe-adapters[postgres]",
+    "openframe-adapters[cockroachdb]",
     "openframe-adapters[mysql]",
+    "openframe-adapters[mariadb]",
     "openframe-adapters[redis]",
     "openframe-adapters[dynamodb]",
     "openframe-adapters[mongo]",
