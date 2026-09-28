@@ -93,94 +93,97 @@ Every adapter wires into your service through a single file — `deps.py` or
 that knows which adapter is active. Routes and services never import adapters
 directly.
 
-The rule is simple:
+Wiring goes through `openframe-core`'s `ApplicationBootstrap`
+(requires `openframe-core>=3.3`) — one recommended class, at two levels of
+ceremony:
 
-> **One adapter** — wire directly with `lru_cache`.
-> **Two or more adapters** — use `PluginRegistry`.
-> The trigger to upgrade is adding a second adapter.
+> **One or a few adapters, no per-adapter config needed** — `ApplicationBootstrap.compose(*plugins)`. No subclass.
+> **An adapter needs its own `config=`/`init_timeout=`, or registration order depends on a runtime condition** — subclass with `configure()`.
+> Either way, `ApplicationBootstrap` manages startup ordering, health aggregation, and graceful shutdown (including telemetry flush) across all adapters — you never hand-roll that part.
 
-### Stage 1 — One adapter
-
-Install one adapter and wire it directly. Four lines. No registry needed.
+### One adapter — `compose()`, no subclass
 
 ```python
 # bootstrap/dependencies.py
-from functools import lru_cache
-from openframe.adapters.db.postgres import PostgresRepository, PostgresSettings
+from openframe.adapters.db.postgres import PostgresPlugin, PostgresSettings
+from openframe.core.ports import Capability
+from openframe.core.runtime import ApplicationBootstrap
 from openframe.core.tracing import TracingProxy
 from src.adapters.item_repository import ItemPostgresRepository
 from src.application.services.item_service import ItemService
 
-@lru_cache(maxsize=1)
-def _get_repository() -> ItemPostgresRepository:
-    return ItemPostgresRepository(PostgresSettings())
+app = ApplicationBootstrap.compose(
+    PostgresPlugin(PostgresSettings(), repository_class=ItemPostgresRepository)
+)
 
 def get_item_service() -> ItemService:
-    return ItemService(TracingProxy(_get_repository(), prefix="repository.item"))
+    repo = TracingProxy(app.get(Capability.PERSISTENCE).get_repository(), prefix="repository.item")
+    return ItemService(repo)
 ```
 
 `PostgresSettings()` reads `DATABASE_URL` from env at startup.
-`lru_cache(maxsize=1)` constructs the repository once per process.
-`TracingProxy` wraps it for automatic OTel spans on every call.
+`TracingProxy` wraps the repository for automatic OTel spans on every call.
 
-### Stage 2 — Two or more adapters
+### Two or more adapters — still `compose()`, or subclass if you need per-adapter config
 
-When a second adapter is needed, replace `lru_cache` with `PluginRegistry`.
-The registry handles startup ordering, health aggregation, and graceful
-shutdown across all adapters.
+`compose()` accepts any number of ports — pass them all in one call:
 
 ```python
 # bootstrap/dependencies.py
 from openframe.adapters.db.postgres import PostgresPlugin, PostgresSettings
 from openframe.adapters.db.redis import RedisPlugin, RedisSettings
-from openframe.core.plugins import PluginRegistry
+from openframe.core.ports import Capability
+from openframe.core.runtime import ApplicationBootstrap
 from openframe.core.tracing import TracingProxy
 from src.application.services.item_service import ItemService
 from src.application.services.session_service import SessionService
 
-_registry: PluginRegistry | None = None
-
-async def initialise() -> None:
-    global _registry
-    _registry = PluginRegistry()
-    _registry.register(PostgresPlugin(PostgresSettings()))  # capability: Capability.PERSISTENCE
-    _registry.register(RedisPlugin(RedisSettings()))        # capability: Capability.CACHE
-    await _registry.initialize_all()   # fails fast if any backend unreachable
-
-async def shutdown() -> None:
-    if _registry:
-        await _registry.shutdown_all()  # never raises
+app = ApplicationBootstrap.compose(
+    PostgresPlugin(PostgresSettings()),   # capability: Capability.PERSISTENCE
+    RedisPlugin(RedisSettings()),          # capability: Capability.CACHE
+)
 
 def get_item_service() -> ItemService:
-    repo = TracingProxy(
-        _registry.get("persistence").get_repository(),
-        prefix="repository.item",
-    )
+    repo = TracingProxy(app.get(Capability.PERSISTENCE).get_repository(), prefix="repository.item")
     return ItemService(repo)
 
 def get_session_service() -> SessionService:
-    cache = TracingProxy(
-        _registry.get("cache").get_repository(),
-        prefix="cache.session",
-    )
+    cache = TracingProxy(app.get(Capability.CACHE).get_repository(), prefix="cache.session")
     return SessionService(cache)
 ```
 
-Wire `initialise()` and `shutdown()` in your FastAPI lifespan:
+Reach for a subclass instead once an adapter needs its own `config=` mapping,
+a per-adapter `init_timeout=`, or registration order that depends on a
+runtime condition:
+
+```python
+class AppBootstrap(ApplicationBootstrap):
+    def configure(self) -> None:
+        self.register(PostgresPlugin(PostgresSettings()), config={"pool_hint": "primary"})
+        self.register(RedisPlugin(RedisSettings()), init_timeout=5.0)
+
+app = AppBootstrap()
+```
+
+For the deliberate multi-port-per-capability case (e.g. primary + replica
+Postgres), use `app.get_all(Capability.PERSISTENCE)` or, for anything neither
+covers, the underlying registry directly via `app.registry`.
+
+Wire `start()` and `stop()` in your FastAPI lifespan:
 
 ```python
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from openframe.core.middleware import TelemetryMiddleware
 from openframe.core.telemetry import setup_telemetry
-from src.bootstrap import dependencies
+from src.bootstrap.dependencies import app as bootstrap
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_telemetry()
-    await dependencies.initialise()
+    await bootstrap.start()   # initializes every registered adapter — fails fast if any backend unreachable
     yield
-    await dependencies.shutdown()
+    await bootstrap.stop()    # shuts down every adapter, then flushes telemetry — never raises
 
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(TelemetryMiddleware)
@@ -193,9 +196,11 @@ the plain base adapter class — `repository_class` (Postgres, Mongo, Redis),
 `producer_class` and `consumer_class` (Kafka):
 
 ```python
-registry.register(PostgresPlugin(PostgresSettings(), table="items", repository_class=ItemRepository))
-registry.register(RedisPlugin(RedisSettings(), repository_class=SessionRepository))
-registry.register(KafkaPlugin(KafkaSettings(), producer_class=ArtifactEventProducer, consumer_class=OrderEventConsumer))
+app = ApplicationBootstrap.compose(
+    PostgresPlugin(PostgresSettings(), table="items", repository_class=ItemRepository),
+    RedisPlugin(RedisSettings(), repository_class=SessionRepository),
+    KafkaPlugin(KafkaSettings(), producer_class=ArtifactEventProducer, consumer_class=OrderEventConsumer),
+)
 ```
 
 `get_repository()` / `get_producer()` / `make_consumer()` then return an
@@ -209,13 +214,13 @@ Every `*Plugin` class declares a `capability` attribute — a typed
 `openframe.core.ports.Capability` enum member (not a raw string as of
 `openframe-core` v3.0; the module was `openframe.core.contracts` before
 v3.1, which merged it into `openframe.core.ports`). This is the key used
-by `registry.get()`:
+by `ApplicationBootstrap.get()` / `PluginRegistry.get()`:
 
 ```python
 from openframe.core.ports import Capability
 
-registry.get(Capability.PERSISTENCE)  # → PostgresPlugin / MongoPlugin
-registry.get(Capability.CACHE)        # → RedisPlugin
+app.get(Capability.PERSISTENCE)  # → PostgresPlugin / MongoPlugin
+app.get(Capability.CACHE)        # → RedisPlugin
 ```
 
 The capability taxonomy is a closed enum shared across the entire OpenFrame
@@ -240,29 +245,32 @@ keep working, but new code should key on the enum member directly.
 ### The env-var swap exception
 
 Switching between adapters via an environment variable (`PERSISTENCE_BACKEND=postgres`
-vs `PERSISTENCE_BACKEND=mongo`) is still Stage 1 — because only one adapter
-is active at any moment. Use `lru_cache` direct wiring with a conditional:
+vs `PERSISTENCE_BACKEND=mongo`) still only ever has **one** adapter active at
+a time — `compose()` still applies, just with the chosen plugin decided
+before the call:
 
 ```python
-@lru_cache(maxsize=1)
-def _get_repository():
+def _make_plugin():
     backend = os.environ.get("PERSISTENCE_BACKEND", "postgres")
     if backend == "postgres":
-        return ItemPostgresRepository(PostgresSettings())
+        return PostgresPlugin(PostgresSettings(), repository_class=ItemPostgresRepository)
     elif backend == "mongo":
-        return ItemMongoRepository(MongoSettings())
+        return MongoPlugin(MongoSettings(), repository_class=ItemMongoRepository)
     raise ValueError(f"Unknown PERSISTENCE_BACKEND: {backend!r}")
+
+app = ApplicationBootstrap.compose(_make_plugin())
 ```
 
-`PluginRegistry` is for services that need multiple adapters simultaneously,
-not for services that swap between adapters via configuration.
+Both backends still register under the same `Capability.PERSISTENCE` — the
+rest of your service (`app.get(Capability.PERSISTENCE)`) never knows which
+one is active.
 
 ### Full wiring reference
 
-For the complete guide — upgrade path from Stage 1 to Stage 2, lifespan
-wiring, and architecture diagrams — see the
-[Composition Root](https://furious-meteors.github.io/openframe-core/developer-guide/composition-root/)
-page in the `openframe-core` documentation.
+For the complete guide — the three-tier model (`compose()` → `configure()`
+subclass → `.registry` escape hatch), lifespan wiring, and architecture
+diagrams — see [How It Works § Choosing a Wiring Pattern](https://furious-meteors.github.io/openframe-core/developer-guide/how-it-works/#choosing-a-wiring-pattern)
+in the `openframe-core` documentation.
 
 ---
 
