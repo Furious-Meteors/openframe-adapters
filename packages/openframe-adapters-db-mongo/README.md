@@ -81,6 +81,36 @@ artifact: Artifact | None = await repo.get("507f1f77bcf86cd799439011")
 
 ---
 
+## Wiring into an application
+
+The examples above construct `MongoRepository` directly and skip lifecycle
+management. For a real service, wire the adapter through its `MongoPlugin`
+(the `BasePort`-satisfying plugin class) so connect/health/close are handled
+for you. The recommended entry point is `ApplicationBootstrap.compose()`
+from `openframe-core>=3.3`:
+
+```python
+from openframe.core.runtime import ApplicationBootstrap
+from openframe.core.ports import Capability
+from openframe.adapters.db.mongo import MongoPlugin, MongoSettings
+
+mongo_port = MongoPlugin(MongoSettings(), collection="artifacts")
+
+async with ApplicationBootstrap.compose(mongo_port) as app:
+    repo = app.get(Capability.PERSISTENCE).get_repository()
+    doc = await repo.get("507f1f77bcf86cd799439011")
+# initialize() ran on entry, shutdown() runs automatically on exit
+```
+
+`compose()` is the right choice for the common case of one or a few ports.
+Reach for a subclassed `ApplicationBootstrap` with `configure()` only when
+you need per-port `config=`/`init_timeout=` or conditional registration
+order, and use `ApplicationBootstrap.registry` as an escape hatch for
+anything neither tier covers (e.g. `registry.get_all(Capability.PERSISTENCE)`
+when more than one persistence port is registered deliberately).
+
+---
+
 ## `_id` handling
 
 MongoDB uses `_id` as the document identifier; `BaseRepository` uses

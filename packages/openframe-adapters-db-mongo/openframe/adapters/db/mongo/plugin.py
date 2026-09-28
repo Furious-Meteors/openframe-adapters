@@ -6,22 +6,26 @@ OpenFrame plugin wrapper for MongoRepository.
 Stability: beta
 Capability: "persistence"
 
-Usage via PluginRegistry (optional)::
+Recommended usage — ApplicationBootstrap.compose() (openframe-core>=3.3)::
 
-    from openframe.core.plugins import PluginRegistry
+    from openframe.core.runtime import ApplicationBootstrap
     from openframe.core.ports import Capability
     from openframe.adapters.db.mongo import MongoPlugin, MongoSettings
 
-    registry = PluginRegistry()
+    port = MongoPlugin(MongoSettings(), collection="documents")
+    async with ApplicationBootstrap.compose(port) as app:
+        repo = app.get(Capability.PERSISTENCE).get_repository()
+
+Escape hatch — direct PluginRegistry access via ApplicationBootstrap.registry,
+for cases compose()/get_all() don't cover (e.g. per-port config/init_timeout,
+conditional registration order)::
+
+    from openframe.core.ports import Capability
+
+    registry = app.registry
     registry.register(MongoPlugin(MongoSettings(), collection="documents"))
     await registry.initialize_all()
-
-    plugin = registry.get(Capability.PERSISTENCE)
-    repo = plugin.get_repository()
-
-Usage via deps.py (unchanged, no plugin needed)::
-
-    repo = MongoRepository(MongoSettings(), collection="documents")
+    repo = registry.get(Capability.PERSISTENCE).get_repository()
 """
 # Capability: "persistence"
 # See capability taxonomy:
@@ -75,7 +79,7 @@ class MongoPlugin(BasePort):
     """
 
     name:       str = "openframe-mongo"
-    version:    str = "2.0.1"
+    version:    str = "2.0.2"
     capability: Capability = Capability.PERSISTENCE
 
     def __init__(
