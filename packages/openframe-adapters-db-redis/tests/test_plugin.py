@@ -47,7 +47,7 @@ def test_redis_plugin_name(plugin: RedisPlugin) -> None:
 
 
 def test_redis_plugin_version(plugin: RedisPlugin) -> None:
-    assert plugin.version == "2.0.3"
+    assert plugin.version == "2.0.4"
 
 
 def test_redis_plugin_capability(plugin: RedisPlugin) -> None:

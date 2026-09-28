@@ -45,7 +45,7 @@ def test_kafka_plugin_name(plugin: KafkaPlugin) -> None:
 
 
 def test_kafka_plugin_version(plugin: KafkaPlugin) -> None:
-    assert plugin.version == "1.4.3"
+    assert plugin.version == "1.4.4"
 
 
 def test_kafka_plugin_capability(plugin: KafkaPlugin) -> None:

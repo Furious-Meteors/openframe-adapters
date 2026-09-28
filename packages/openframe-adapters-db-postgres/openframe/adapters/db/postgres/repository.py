@@ -94,7 +94,7 @@ class PostgresRepository(Generic[T]):
     _id_column: str = "id"
 
     name:       str = "openframe-postgres-repository"
-    version:    str = "1.3.0"
+    version:    str = "1.3.1"
     capability: Capability = Capability.PERSISTENCE
 
     def __init__(

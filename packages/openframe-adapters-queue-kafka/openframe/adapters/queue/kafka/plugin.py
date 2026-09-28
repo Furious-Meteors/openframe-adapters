@@ -37,7 +37,7 @@ No lifecycle needed (tests/scripts) — construct the producer directly::
 """
 # Capability: "queue"
 # See capability taxonomy:
-# https://furious-meteors.github.io/openframe-core/developer-guide/composition-root/
+# https://furious-meteors.github.io/openframe-core/developer-guide/how-it-works/#choosing-a-wiring-pattern
 from __future__ import annotations
 
 import logging
@@ -91,7 +91,7 @@ class KafkaPlugin(BasePort):
     """
 
     name:       str = "openframe-kafka"
-    version:    str = "1.4.3"
+    version:    str = "1.4.4"
     capability: Capability = Capability.QUEUE
 
     def __init__(

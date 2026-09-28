@@ -29,7 +29,7 @@ conditional registration order)::
 """
 # Capability: "persistence"
 # See capability taxonomy:
-# https://furious-meteors.github.io/openframe-core/developer-guide/composition-root/
+# https://furious-meteors.github.io/openframe-core/developer-guide/how-it-works/#choosing-a-wiring-pattern
 from __future__ import annotations
 
 import logging
@@ -79,7 +79,7 @@ class MongoPlugin(BasePort):
     """
 
     name:       str = "openframe-mongo"
-    version:    str = "2.0.2"
+    version:    str = "2.0.3"
     capability: Capability = Capability.PERSISTENCE
 
     def __init__(

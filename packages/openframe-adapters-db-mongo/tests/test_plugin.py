@@ -50,7 +50,7 @@ def test_mongo_plugin_name(plugin):
 
 
 def test_mongo_plugin_version(plugin):
-    assert plugin.version == "2.0.2"
+    assert plugin.version == "2.0.3"
 
 
 def test_mongo_plugin_capability(plugin):
