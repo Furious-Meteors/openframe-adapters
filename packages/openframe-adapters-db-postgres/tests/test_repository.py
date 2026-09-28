@@ -11,7 +11,12 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from openframe.adapters.db.postgres import PostgresRepository
-from openframe.core.exceptions import AdapterConfigurationError, AdapterQueryError, AdapterTimeoutError
+from openframe.core.exceptions import (
+    AdapterConfigurationError,
+    AdapterConnectionError,
+    AdapterQueryError,
+    AdapterTimeoutError,
+)
 from openframe.core.ports import BaseRepository
 from openframe.core.testing import RepositoryContractTests
 
@@ -185,6 +190,48 @@ class TestGet:
         import asyncio
         mock_pool.fetchrow.side_effect = asyncio.TimeoutError()
         with pytest.raises(AdapterTimeoutError) as exc_info:
+            await repo.get("1")
+        assert exc_info.value.operation == "get"
+
+    @pytest.mark.parametrize(
+        "exc_type_name",
+        [
+            "ConnectionDoesNotExistError",
+            "ConnectionFailureError",
+            "TooManyConnectionsError",
+        ],
+    )
+    async def test_get_lost_connection_raises_adapter_connection_error(
+        self, repo: PostgresRepository, mock_pool: MagicMock, exc_type_name: str
+    ) -> None:
+        """
+        A connection dropped mid-query must surface as AdapterConnectionError
+        (retryable), not AdapterQueryError — matching MongoRepository's/
+        RedisRepository's connection-vs-query distinction. Regression test
+        for the bug where every asyncpg.PostgresError, including these
+        connection-class (SQLSTATE 08xxx) errors, was misclassified as a
+        non-retryable AdapterQueryError.
+        """
+        import asyncpg
+        exc_type = getattr(asyncpg, exc_type_name)
+        mock_pool.fetchrow.side_effect = exc_type("connection lost")
+        with pytest.raises(AdapterConnectionError) as exc_info:
+            await repo.get("1")
+        assert exc_info.value.operation == "get"
+        assert exc_info.value.retryable is True
+
+    async def test_get_interface_error_raises_adapter_connection_error(
+        self, repo: PostgresRepository, mock_pool: MagicMock
+    ) -> None:
+        """
+        asyncpg.InterfaceError (e.g. "pool is closing") is NOT a subclass of
+        asyncpg.PostgresError, so it must be explicitly caught alongside it
+        or it would propagate as a raw, untranslated driver exception —
+        violating the "adapters raise only AdapterError" contract.
+        """
+        import asyncpg
+        mock_pool.fetchrow.side_effect = asyncpg.InterfaceError("pool is closing")
+        with pytest.raises(AdapterConnectionError) as exc_info:
             await repo.get("1")
         assert exc_info.value.operation == "get"
 

@@ -51,6 +51,17 @@ __all__ = ["PostgresRepository"]
 
 T = TypeVar("T")
 
+# asyncpg exceptions that indicate a broken/lost connection rather than a
+# query-level failure. Raised mid-query (e.g. the connection drops while a
+# statement is in flight), distinct from the connect-time errors handled in
+# connection.get_postgres_pool().
+_CONNECTION_ERRORS = (
+    asyncpg.ConnectionDoesNotExistError,
+    asyncpg.ConnectionFailureError,
+    asyncpg.InterfaceError,
+    asyncpg.TooManyConnectionsError,
+)
+
 
 class PostgresRepository(Generic[T]):
     """
@@ -130,6 +141,37 @@ class PostgresRepository(Generic[T]):
         return vars(entity)
 
     # ------------------------------------------------------------------
+    # Exception mapping helper
+    # ------------------------------------------------------------------
+
+    def _wrap_asyncpg(
+        self, exc: Exception, operation: str
+    ) -> AdapterQueryError | AdapterConnectionError:
+        """
+        Map an ``asyncpg.PostgresError`` to the appropriate ``AdapterError``
+        subclass.
+
+        Distinguishes a lost/broken connection (``AdapterConnectionError`` —
+        retryable) from an in-band query failure such as a constraint
+        violation (``AdapterQueryError`` — not retryable by default), the
+        same distinction ``MongoRepository``/``RedisRepository`` already
+        make. Caller must ``raise ... from exc`` at the call site.
+        """
+        if isinstance(exc, _CONNECTION_ERRORS):
+            return AdapterConnectionError(
+                f"{operation} failed — connection to PostgreSQL was lost: {exc}",
+                adapter=self._settings.adapter_name,
+                operation=operation,
+                cause=exc,
+            )
+        return AdapterQueryError(
+            f"{operation} failed on {self._table}: {exc}",
+            adapter=self._settings.adapter_name,
+            operation=operation,
+            cause=exc,
+        )
+
+    # ------------------------------------------------------------------
     # BaseRepository[T] interface
     # ------------------------------------------------------------------
 
@@ -162,13 +204,8 @@ class PostgresRepository(Generic[T]):
                 operation="get",
                 cause=exc,
             ) from exc
-        except asyncpg.PostgresError as exc:
-            raise AdapterQueryError(
-                f"get failed on {self._table}: {exc}",
-                adapter=self._settings.adapter_name,
-                operation="get",
-                cause=exc,
-            ) from exc
+        except (asyncpg.PostgresError, asyncpg.InterfaceError) as exc:
+            raise self._wrap_asyncpg(exc, "get") from exc
 
         if row is None:
             return None
@@ -210,13 +247,8 @@ class PostgresRepository(Generic[T]):
                 operation="list",
                 cause=exc,
             ) from exc
-        except asyncpg.PostgresError as exc:
-            raise AdapterQueryError(
-                f"list failed on {self._table}: {exc}",
-                adapter=self._settings.adapter_name,
-                operation="list",
-                cause=exc,
-            ) from exc
+        except (asyncpg.PostgresError, asyncpg.InterfaceError) as exc:
+            raise self._wrap_asyncpg(exc, "list") from exc
 
         entities = [self._row_to_entity(r) for r in rows]
         return entities, count
@@ -260,13 +292,8 @@ class PostgresRepository(Generic[T]):
                 operation="create",
                 cause=exc,
             ) from exc
-        except asyncpg.PostgresError as exc:
-            raise AdapterQueryError(
-                f"create failed on {self._table}: {exc}",
-                adapter=self._settings.adapter_name,
-                operation="create",
-                cause=exc,
-            ) from exc
+        except (asyncpg.PostgresError, asyncpg.InterfaceError) as exc:
+            raise self._wrap_asyncpg(exc, "create") from exc
 
         return self._row_to_entity(row)  # type: ignore[arg-type]
 
@@ -320,13 +347,8 @@ class PostgresRepository(Generic[T]):
                 operation="update",
                 cause=exc,
             ) from exc
-        except asyncpg.PostgresError as exc:
-            raise AdapterQueryError(
-                f"update failed on {self._table}: {exc}",
-                adapter=self._settings.adapter_name,
-                operation="update",
-                cause=exc,
-            ) from exc
+        except (asyncpg.PostgresError, asyncpg.InterfaceError) as exc:
+            raise self._wrap_asyncpg(exc, "update") from exc
 
         if row is None:
             return None
@@ -358,13 +380,8 @@ class PostgresRepository(Generic[T]):
                 operation="delete",
                 cause=exc,
             ) from exc
-        except asyncpg.PostgresError as exc:
-            raise AdapterQueryError(
-                f"delete failed on {self._table}: {exc}",
-                adapter=self._settings.adapter_name,
-                operation="delete",
-                cause=exc,
-            ) from exc
+        except (asyncpg.PostgresError, asyncpg.InterfaceError) as exc:
+            raise self._wrap_asyncpg(exc, "delete") from exc
 
         # asyncpg returns "DELETE N" where N is the number of deleted rows.
         return status == "DELETE 1"

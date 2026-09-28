@@ -66,6 +66,41 @@ item: Item | None = await repo.get("abc-123")
 
 ---
 
+## Wiring into an application
+
+For a real service, wire `PostgresPlugin` (the `BasePort`-satisfying plugin
+class) through `ApplicationBootstrap.compose()` from `openframe-core`. This
+gives you proper lifecycle management — `initialize()` / `health()` /
+`shutdown()` — for free, instead of constructing `PostgresRepository`
+directly and managing the pool yourself:
+
+```python
+from openframe.core.runtime import ApplicationBootstrap
+from openframe.core.ports import Capability
+from openframe.adapters.db.postgres import PostgresPlugin, PostgresSettings
+
+settings = PostgresSettings()  # reads DATABASE_URL from env
+plugin = PostgresPlugin(settings, table="items", id_column="id")
+
+async with ApplicationBootstrap.compose(plugin) as app:
+    repo = app.get(Capability.PERSISTENCE)   # -> PostgresRepository
+    item = await repo.get("abc-123")
+# pool is closed automatically on exit (plugin.shutdown() ran)
+```
+
+`compose()` calls `plugin.initialize()` on entry and `plugin.shutdown()` on
+exit, so the pool is created, health-checked, and torn down without any
+manual lifecycle code. Requires `openframe-core>=3.3`.
+
+Reach for a subclassed `ApplicationBootstrap` (with a `configure()` method)
+only when you need per-port `config=`/`init_timeout=` or conditional
+registration order; use `app.registry` as an escape hatch for anything
+neither tier covers. The `PostgresRepository(settings)` construction shown
+above under "Quick start" remains valid for tests, scripts, or any context
+that doesn't need plugin lifecycle management.
+
+---
+
 ## Configuration
 
 All settings are read from environment variables.

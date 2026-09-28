@@ -5,20 +5,26 @@ OpenFrame plugin wrapper for PostgresRepository.
 
 Stability: beta
 
-Usage via PluginRegistry (optional)::
+Recommended usage — ApplicationBootstrap.compose() (openframe-core>=3.3)::
 
-    from openframe.core.plugins import PluginRegistry
+    from openframe.core.runtime import ApplicationBootstrap
     from openframe.core.ports import Capability
     from openframe.adapters.db.postgres import PostgresPlugin, PostgresSettings
 
-    registry = PluginRegistry()
-    registry.register(PostgresPlugin(PostgresSettings()))
-    await registry.initialize_all()
+    plugin = PostgresPlugin(PostgresSettings(), table="items", id_column="id")
 
-    plugin = registry.get(Capability.PERSISTENCE)
-    repo = plugin.get_repository()
+    async with ApplicationBootstrap.compose(plugin) as app:
+        repo = app.get(Capability.PERSISTENCE)
+        item = await repo.get("abc-123")
+    # plugin.shutdown() ran automatically on exit
 
-Usage via deps.py (unchanged, no plugin needed)::
+Use a subclassed ApplicationBootstrap (configure()) instead when you need
+per-port config=/init_timeout= or conditional registration order, and
+app.registry (PluginRegistry escape hatch) only for what neither tier
+covers.
+
+For tests, scripts, or anywhere plugin lifecycle management isn't needed,
+construct PostgresRepository directly (no plugin required)::
 
     repo = PostgresRepository(PostgresSettings())
     traced = TracingProxy(repo, prefix="repository.item")
@@ -73,7 +79,7 @@ class PostgresPlugin(BasePort):
     """
 
     name:       str = "openframe-postgres"
-    version:    str = "2.0.1"
+    version:    str = "2.0.2"
     capability: Capability = Capability.PERSISTENCE
 
     def __init__(
