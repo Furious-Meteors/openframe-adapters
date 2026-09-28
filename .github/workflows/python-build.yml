@@ -25,6 +25,8 @@ jobs:
           - packages/openframe-adapters-db-postgres
           - packages/openframe-adapters-db-redis
           - packages/openframe-adapters-queue-kafka
+          - packages/openframe-adapters-queue-nats
+          - packages/openframe-adapters-queue-rabbitmq
           - meta/openframe-adapters
 
     environment:

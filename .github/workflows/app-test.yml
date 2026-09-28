@@ -29,6 +29,8 @@ jobs:
           - openframe-adapters-db-mongo
           - openframe-adapters-db-redis
           - openframe-adapters-queue-kafka
+          - openframe-adapters-queue-nats
+          - openframe-adapters-queue-rabbitmq
 
     defaults:
       run:

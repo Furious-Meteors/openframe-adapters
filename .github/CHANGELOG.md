@@ -7,6 +7,7 @@
 
 ### Fixed
 - Meta package (`openframe-adapters`) — the `nats`/`rabbitmq` extras had placeholder pins (`>=1.1,<2`) left over from before either package existed for real; corrected to `>=0.1,<1` to match the packages' actual starting version. Bumped meta package to `2.1.0` (minor — two extras that previously installed nothing real now install working adapters, a meaningful new capability from the meta package's own consumer-facing perspective).
+- **`.github/workflows/app-test.yml` and `python-build.yml` didn't include either new package** — both hardcode an explicit package matrix, and neither had been updated when the packages were added, so CI would have silently never run their tests, and `python-build.yml` would never have built or published them to PyPI. Caught only because the user asked directly whether the workflows had been updated — not caught by the checklist, which had no CI/CD section. Fixed both matrices; added a new "CI/CD" section to `docs/adapter-checklist.md` (repo-wide files, easy to forget since they live outside the new package's own directory) so this doesn't recur for future packages.
 
 ---
 
