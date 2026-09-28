@@ -75,7 +75,7 @@ def repo(
     from openframe.adapters.db.mongo import MongoRepository
     import openframe.adapters.db.mongo.connection as conn_module
 
-    conn_module._client_cache[mock_settings.mongo_url] = mock_client  # type: ignore[attr-defined]
+    conn_module._client_cache[conn_module._cache_key(mock_settings)] = mock_client  # type: ignore[attr-defined]
     r = MongoRepository(mock_settings, collection="artifacts")  # type: ignore[arg-type]
     yield r
     conn_module._client_cache.clear()

@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from openframe.adapters.db.postgres import PostgresSettings
-from openframe.adapters.db.postgres.connection import _pool_cache, get_postgres_pool
+from openframe.adapters.db.postgres.connection import _cache_key, _pool_cache, get_postgres_pool
 from openframe.core.exceptions import (
     AdapterConfigurationError,
     AdapterConnectionError,
@@ -121,4 +121,36 @@ class TestGetPostgresPool:
         ):
             await get_postgres_pool(settings)
 
-        assert _pool_cache[settings.database_url] is fake_pool
+        assert _pool_cache[_cache_key(settings)] is fake_pool
+
+    async def test_same_url_different_pool_size_produces_different_pools(
+        self, settings: PostgresSettings
+    ) -> None:
+        """
+        Regression test: two Settings for the SAME database_url but
+        different pool_size must NOT share a pool — the second caller
+        must not silently inherit the first caller's pool configuration.
+        """
+        settings_bigger_pool = PostgresSettings(
+            database_url=settings.database_url, pool_size=50
+        )
+        pool_small = MagicMock(name="pool_small")
+        pool_big = MagicMock(name="pool_big")
+        create_pool_mock = AsyncMock(side_effect=[pool_small, pool_big])
+        with patch(
+            "openframe.adapters.db.postgres.connection.asyncpg.create_pool",
+            new=create_pool_mock,
+        ):
+            p1 = await get_postgres_pool(settings)
+            p2 = await get_postgres_pool(settings_bigger_pool)
+
+        assert p1 is not p2
+        assert p1 is pool_small
+        assert p2 is pool_big
+        # A third call with settings matching the second config reuses it.
+        with patch(
+            "openframe.adapters.db.postgres.connection.asyncpg.create_pool",
+            new=AsyncMock(side_effect=AssertionError("should not create a third pool")),
+        ):
+            p3 = await get_postgres_pool(settings_bigger_pool)
+        assert p3 is pool_big

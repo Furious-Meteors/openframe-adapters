@@ -78,7 +78,7 @@ class TestRedisRepositoryContracts(RepositoryContractTests):
         client.mget = AsyncMock(side_effect=_mget)
         client.scan_iter = _scan_iter
 
-        conn_module._client_cache[mock_settings.redis_url] = client
+        conn_module._client_cache[conn_module._cache_key(mock_settings)] = client
         r = RedisRepository(mock_settings)
         yield r
         conn_module._client_cache.clear()
@@ -112,7 +112,7 @@ class TestMakeKey:
             redis_url="redis://localhost:6379/0",
             redis_key_prefix="myapp",
         )
-        conn_module._client_cache[settings.redis_url] = mock_redis
+        conn_module._client_cache[conn_module._cache_key(settings)] = mock_redis
         r = RedisRepository(settings)
         assert r._make_key("item-1") == "myapp:item-1"
         conn_module._client_cache.clear()
@@ -192,7 +192,7 @@ class TestCreate:
             redis_url="redis://localhost:6379/0",
             redis_default_ttl=300,
         )
-        conn_module._client_cache[settings.redis_url] = mock_redis
+        conn_module._client_cache[conn_module._cache_key(settings)] = mock_redis
         mock_redis.set.return_value = True
         repo = RedisRepository(settings)
         await repo.create({"id": "ttl-test", "name": "x"})

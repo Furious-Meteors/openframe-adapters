@@ -45,7 +45,7 @@ class TestPostgresRepositoryContracts(RepositoryContractTests):
 
         import openframe.adapters.db.postgres.connection as conn_module
 
-        conn_module._pool_cache[mock_settings.database_url] = mock_pool
+        conn_module._pool_cache[conn_module._cache_key(mock_settings)] = mock_pool
 
         # In-memory store that simulates the database table.
         _store: dict[str, dict] = {}

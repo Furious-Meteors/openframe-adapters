@@ -126,7 +126,7 @@ class TestMongoRepositoryContracts(RepositoryContractTests):
         client.admin.command = AsyncMock(return_value={"ok": 1})
         client.close = MagicMock()
 
-        conn_module._client_cache[mock_settings.mongo_url] = client
+        conn_module._client_cache[conn_module._cache_key(mock_settings)] = client
         r = MongoRepository(mock_settings, collection="items")
         yield r
         conn_module._client_cache.clear()
@@ -486,16 +486,17 @@ class TestClose:
     ) -> None:
         import openframe.adapters.db.mongo.connection as conn_module
 
-        conn_module._client_cache[repo._settings.mongo_url] = mock_client
+        key = conn_module._cache_key(repo._settings)
+        conn_module._client_cache[key] = mock_client
         await repo.close()
-        assert repo._settings.mongo_url not in conn_module._client_cache
+        assert key not in conn_module._client_cache
 
     async def test_close_calls_client_close(
         self, repo: MongoRepository, mock_client: MagicMock
     ) -> None:
         import openframe.adapters.db.mongo.connection as conn_module
 
-        conn_module._client_cache[repo._settings.mongo_url] = mock_client
+        conn_module._client_cache[conn_module._cache_key(repo._settings)] = mock_client
         await repo.close()
         mock_client.close.assert_called_once()
 
@@ -520,7 +521,7 @@ class TestSubclassOverride:
             def _entity_to_doc(self, entity: Paper) -> dict:
                 return {"name": entity.name}
 
-        conn_module._client_cache[mock_settings.mongo_url] = mock_client
+        conn_module._client_cache[conn_module._cache_key(mock_settings)] = mock_client
         repo = PaperRepo(mock_settings)
 
         oid = ObjectId(VALID_OID)

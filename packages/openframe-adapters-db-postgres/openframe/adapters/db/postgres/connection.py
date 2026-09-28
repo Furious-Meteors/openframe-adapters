@@ -5,10 +5,17 @@ asyncpg connection pool factory and cache.
 
 ``get_postgres_pool()`` is the single entry point for obtaining an asyncpg
 pool. It creates the pool on first call and returns the cached instance on
-every subsequent call with the same ``DATABASE_URL``. Multiple
-``PostgresRepository`` instances in the same process share the same pool.
+every subsequent call with the same ``database_url`` AND the same
+pool-relevant settings (``pool_size``, ``pool_max_inactive_conn_lifetime``,
+``pool_command_timeout``, ``pool_max_queries``). Multiple
+``PostgresRepository`` instances constructed with matching settings share
+the same pool.
 
-Pool cache: ``_pool_cache`` is a module-level dict keyed by database URL.
+Pool cache: ``_pool_cache`` is a module-level dict keyed by
+``(database_url, pool-config-tuple)`` — not the URL alone. Two
+``PostgresSettings`` instances with the same ``database_url`` but different
+pool sizing get two distinct pools, rather than the second one silently
+inheriting the first one's configuration (the bug this key shape fixes).
 Do NOT replace this with ``@lru_cache`` — that decorator does not support
 async functions and would create a new coroutine on each call.
 """
@@ -27,18 +34,40 @@ from openframe.core.exceptions import (
 
 from .config import PostgresSettings
 
-__all__ = ["get_postgres_pool", "_pool_cache"]
+__all__ = ["get_postgres_pool", "_pool_cache", "_cache_key"]
 
-_pool_cache: dict[str, asyncpg.Pool] = {}  # type: ignore[type-arg]
+_PoolCacheKey = tuple[str, tuple[int, float, float, int]]
+
+_pool_cache: dict[_PoolCacheKey, asyncpg.Pool] = {}  # type: ignore[type-arg]
+
+
+def _cache_key(settings: PostgresSettings) -> _PoolCacheKey:
+    """
+    Cache key covering the URL plus every pool-shape setting.
+
+    Two ``PostgresSettings`` for the same ``database_url`` but different
+    pool sizing must not share a pool — a shared key here would mean the
+    second caller silently gets the first caller's pool configuration.
+    """
+    return (
+        settings.database_url,
+        (
+            settings.pool_size,
+            settings.pool_max_inactive_conn_lifetime,
+            settings.pool_command_timeout,
+            settings.pool_max_queries,
+        ),
+    )
 
 
 async def get_postgres_pool(settings: PostgresSettings) -> asyncpg.Pool:  # type: ignore[type-arg]
     """
     Create or return the cached asyncpg connection pool.
 
-    Creates the pool on first call for a given ``database_url``. Subsequent
-    calls with the same URL return the cached pool without re-connecting. The
-    pool is shared across all ``PostgresRepository`` instances in the process.
+    Creates the pool on first call for a given ``(database_url, pool config)``
+    pair. Subsequent calls with matching URL and pool settings return the
+    cached pool without re-connecting. A different pool configuration for
+    the same URL gets its own pool rather than reusing the first one's.
 
     Args:
         settings: A fully-validated ``PostgresSettings`` instance.
@@ -55,8 +84,9 @@ async def get_postgres_pool(settings: PostgresSettings) -> asyncpg.Pool:  # type
                                    ``settings.connection_timeout``.
     """
     url = settings.database_url
-    if url in _pool_cache:
-        return _pool_cache[url]
+    key = _cache_key(settings)
+    if key in _pool_cache:
+        return _pool_cache[key]
 
     try:
         async with asyncio.timeout(settings.connection_timeout):
@@ -95,5 +125,5 @@ async def get_postgres_pool(settings: PostgresSettings) -> asyncpg.Pool:  # type
             cause=exc,
         ) from exc
 
-    _pool_cache[url] = pool
+    _pool_cache[key] = pool
     return pool

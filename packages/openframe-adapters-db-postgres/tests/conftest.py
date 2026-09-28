@@ -58,7 +58,7 @@ def repo(mock_settings: object, mock_pool: MagicMock, monkeypatch: pytest.Monkey
     from openframe.adapters.db.postgres import PostgresRepository
     import openframe.adapters.db.postgres.connection as conn_module
 
-    conn_module._pool_cache[mock_settings.database_url] = mock_pool  # type: ignore[attr-defined]
+    conn_module._pool_cache[conn_module._cache_key(mock_settings)] = mock_pool  # type: ignore[attr-defined]
     r = PostgresRepository(mock_settings, table="items", id_column="id")  # type: ignore[arg-type]
     yield r
     conn_module._pool_cache.clear()

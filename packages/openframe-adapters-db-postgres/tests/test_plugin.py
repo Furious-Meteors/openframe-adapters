@@ -49,7 +49,7 @@ def test_postgres_plugin_name(plugin):
 
 
 def test_postgres_plugin_version(plugin):
-    assert plugin.version == "2.0.3"
+    assert plugin.version == "2.0.4"
 
 
 def test_postgres_plugin_capability(plugin):
@@ -63,7 +63,7 @@ async def test_initialize_succeeds_when_health_is_ready(
 ):
     """Successful pool creation + repo.health() READY → plugin status READY."""
     import openframe.adapters.db.postgres.connection as conn_module
-    conn_module._pool_cache[mock_settings.database_url] = mock_pool
+    conn_module._pool_cache[conn_module._cache_key(mock_settings)] = mock_pool
     monkeypatch.setattr(
         PostgresRepository,
         "health",
@@ -82,7 +82,7 @@ async def test_initialize_fails_when_health_is_not_ready(
 ):
     """repo.health() reports non-READY → status FAILED, AdapterConnectionError raised."""
     import openframe.adapters.db.postgres.connection as conn_module
-    conn_module._pool_cache[mock_settings.database_url] = mock_pool
+    conn_module._pool_cache[conn_module._cache_key(mock_settings)] = mock_pool
     monkeypatch.setattr(
         PostgresRepository,
         "health",
@@ -108,7 +108,7 @@ async def test_shutdown_never_raises_when_repo_is_none(plugin):
 async def test_shutdown_sets_status_stopped(plugin, mock_pool, mock_settings, plugin_context):
     """shutdown() always transitions to STOPPED."""
     import openframe.adapters.db.postgres.connection as conn_module
-    conn_module._pool_cache[mock_settings.database_url] = mock_pool
+    conn_module._pool_cache[conn_module._cache_key(mock_settings)] = mock_pool
     mock_pool.fetchval.return_value = 1
     plugin._settings = mock_settings
     await plugin.initialize(plugin_context)
@@ -131,7 +131,7 @@ async def test_get_repository_returns_instance_after_initialize(
     import openframe.adapters.db.postgres.connection as conn_module
     from openframe.adapters.db.postgres import PostgresRepository
 
-    conn_module._pool_cache[mock_settings.database_url] = mock_pool
+    conn_module._pool_cache[conn_module._cache_key(mock_settings)] = mock_pool
     mock_pool.fetchval.return_value = 1
     plugin._settings = mock_settings
     await plugin.initialize(plugin_context)
@@ -162,7 +162,7 @@ async def test_health_returns_ready_after_initialize(
 ):
     """health() after successful init delegates to repo.health() → READY."""
     import openframe.adapters.db.postgres.connection as conn_module
-    conn_module._pool_cache[mock_settings.database_url] = mock_pool
+    conn_module._pool_cache[conn_module._cache_key(mock_settings)] = mock_pool
     monkeypatch.setattr(
         PostgresRepository,
         "health",
@@ -181,7 +181,7 @@ async def test_health_returns_failed_when_repo_health_fails(
 ):
     """health() delegates to repo.health() → FAILED status surfaces, no exception raised."""
     import openframe.adapters.db.postgres.connection as conn_module
-    conn_module._pool_cache[mock_settings.database_url] = mock_pool
+    conn_module._pool_cache[conn_module._cache_key(mock_settings)] = mock_pool
     monkeypatch.setattr(
         PostgresRepository,
         "health",
@@ -236,7 +236,7 @@ async def test_initialize_constructs_custom_repository_class(
     class CustomRepo(PostgresRepository):
         marker = True
 
-    conn_module._pool_cache[mock_settings.database_url] = mock_pool
+    conn_module._pool_cache[conn_module._cache_key(mock_settings)] = mock_pool
     mock_pool.fetchval.return_value = 1
 
     plugin = PostgresPlugin(mock_settings, table="items", repository_class=CustomRepo)
@@ -257,7 +257,7 @@ async def test_get_repository_returns_subclass_not_base_class(
     class CustomRepo(PostgresRepository):
         pass
 
-    conn_module._pool_cache[mock_settings.database_url] = mock_pool
+    conn_module._pool_cache[conn_module._cache_key(mock_settings)] = mock_pool
     mock_pool.fetchval.return_value = 1
 
     plugin = PostgresPlugin(mock_settings, table="items", repository_class=CustomRepo)
@@ -279,7 +279,7 @@ class TestPostgresPluginContracts(PortContractTests):
     def port(self, mock_settings, mock_pool) -> PostgresPlugin:
         import openframe.adapters.db.postgres.connection as conn_module
 
-        conn_module._pool_cache[mock_settings.database_url] = mock_pool
+        conn_module._pool_cache[conn_module._cache_key(mock_settings)] = mock_pool
         mock_pool.fetchval.return_value = 1  # ping / SELECT 1
 
         plugin = PostgresPlugin(mock_settings, table="items")

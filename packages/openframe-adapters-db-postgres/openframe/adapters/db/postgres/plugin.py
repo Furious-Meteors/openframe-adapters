@@ -79,7 +79,7 @@ class PostgresPlugin(BasePort):
     """
 
     name:       str = "openframe-postgres"
-    version:    str = "2.0.3"
+    version:    str = "2.0.4"
     capability: Capability = Capability.PERSISTENCE
 
     def __init__(

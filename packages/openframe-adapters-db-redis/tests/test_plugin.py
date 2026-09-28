@@ -47,7 +47,7 @@ def test_redis_plugin_name(plugin: RedisPlugin) -> None:
 
 
 def test_redis_plugin_version(plugin: RedisPlugin) -> None:
-    assert plugin.version == "2.0.4"
+    assert plugin.version == "2.0.5"
 
 
 def test_redis_plugin_capability(plugin: RedisPlugin) -> None:
@@ -65,7 +65,7 @@ async def test_initialize_succeeds_when_health_is_ready(
 ) -> None:
     """Successful client creation + repo.health() READY → plugin status READY."""
     import openframe.adapters.db.redis.connection as conn_module
-    conn_module._client_cache[mock_settings.redis_url] = mock_redis  # type: ignore[arg-type]
+    conn_module._client_cache[conn_module._cache_key(mock_settings)] = mock_redis  # type: ignore[arg-type]
     monkeypatch.setattr(
         RedisRepository,
         "health",
@@ -90,7 +90,7 @@ async def test_initialize_fails_when_health_is_not_ready(
     import openframe.adapters.db.redis.connection as conn_module
     from openframe.core.exceptions import AdapterConnectionError
 
-    conn_module._client_cache[mock_settings.redis_url] = mock_redis  # type: ignore[arg-type]
+    conn_module._client_cache[conn_module._cache_key(mock_settings)] = mock_redis  # type: ignore[arg-type]
     monkeypatch.setattr(
         RedisRepository,
         "health",
@@ -120,7 +120,7 @@ async def test_shutdown_sets_status_stopped(
 ) -> None:
     """shutdown() always transitions to STOPPED."""
     import openframe.adapters.db.redis.connection as conn_module
-    conn_module._client_cache[mock_settings.redis_url] = mock_redis  # type: ignore[arg-type]
+    conn_module._client_cache[conn_module._cache_key(mock_settings)] = mock_redis  # type: ignore[arg-type]
     plugin._settings = mock_settings
     await plugin.initialize(plugin_context)
 
@@ -143,7 +143,7 @@ async def test_get_repository_returns_redis_repository_after_initialize(
 ) -> None:
     """get_repository() returns a RedisRepository after successful init."""
     import openframe.adapters.db.redis.connection as conn_module
-    conn_module._client_cache[mock_settings.redis_url] = mock_redis  # type: ignore[arg-type]
+    conn_module._client_cache[conn_module._cache_key(mock_settings)] = mock_redis  # type: ignore[arg-type]
     plugin._settings = mock_settings
     await plugin.initialize(plugin_context)
 
@@ -177,7 +177,7 @@ async def test_health_returns_ready_after_initialize(
 ) -> None:
     """health() after successful init delegates to repo.health() → READY."""
     import openframe.adapters.db.redis.connection as conn_module
-    conn_module._client_cache[mock_settings.redis_url] = mock_redis  # type: ignore[arg-type]
+    conn_module._client_cache[conn_module._cache_key(mock_settings)] = mock_redis  # type: ignore[arg-type]
     monkeypatch.setattr(
         RedisRepository,
         "health",
@@ -201,7 +201,7 @@ async def test_health_returns_failed_when_repo_health_fails(
     """health() delegates to repo.health() → FAILED status surfaces, no exception raised."""
     import openframe.adapters.db.redis.connection as conn_module
 
-    conn_module._client_cache[mock_settings.redis_url] = mock_redis  # type: ignore[arg-type]
+    conn_module._client_cache[conn_module._cache_key(mock_settings)] = mock_redis  # type: ignore[arg-type]
     monkeypatch.setattr(
         RedisRepository,
         "health",
@@ -234,7 +234,7 @@ class TestRedisPluginContracts(PortContractTests):
     def port(self, mock_settings: RedisSettings, mock_redis: object) -> RedisPlugin:
         import openframe.adapters.db.redis.connection as conn_module
 
-        conn_module._client_cache[mock_settings.redis_url] = mock_redis  # type: ignore[arg-type]
+        conn_module._client_cache[conn_module._cache_key(mock_settings)] = mock_redis  # type: ignore[arg-type]
 
         plugin = RedisPlugin(mock_settings)
         yield plugin
@@ -275,7 +275,7 @@ async def test_get_repository_returns_subclass_not_base_class(
         pass
 
     import openframe.adapters.db.redis.connection as conn_module
-    conn_module._client_cache[mock_settings.redis_url] = mock_redis  # type: ignore[arg-type]
+    conn_module._client_cache[conn_module._cache_key(mock_settings)] = mock_redis  # type: ignore[arg-type]
 
     plugin = RedisPlugin(mock_settings, repository_class=_DomainRepo)
     await plugin.initialize(plugin_context)

@@ -50,7 +50,7 @@ def test_mongo_plugin_name(plugin):
 
 
 def test_mongo_plugin_version(plugin):
-    assert plugin.version == "2.0.3"
+    assert plugin.version == "2.0.4"
 
 
 def test_mongo_plugin_capability(plugin):
@@ -64,7 +64,7 @@ async def test_initialize_succeeds_when_health_is_ready(
 ):
     """Successful client creation + repo.health() READY → plugin status READY."""
     import openframe.adapters.db.mongo.connection as conn_module
-    conn_module._client_cache[mock_settings.mongo_url] = mock_client
+    conn_module._client_cache[conn_module._cache_key(mock_settings)] = mock_client
     monkeypatch.setattr(
         MongoRepository,
         "health",
@@ -85,7 +85,7 @@ async def test_initialize_fails_when_health_is_not_ready(
     import openframe.adapters.db.mongo.connection as conn_module
     from openframe.core.exceptions import AdapterConnectionError
 
-    conn_module._client_cache[mock_settings.mongo_url] = mock_client
+    conn_module._client_cache[conn_module._cache_key(mock_settings)] = mock_client
     monkeypatch.setattr(
         MongoRepository,
         "health",
@@ -112,7 +112,7 @@ async def test_shutdown_sets_status_stopped(
 ):
     """shutdown() always transitions to STOPPED."""
     import openframe.adapters.db.mongo.connection as conn_module
-    conn_module._client_cache[mock_settings.mongo_url] = mock_client
+    conn_module._client_cache[conn_module._cache_key(mock_settings)] = mock_client
     mock_client.admin.command.return_value = {"ok": 1}
     plugin._settings = mock_settings
     await plugin.initialize(plugin_context)
@@ -135,7 +135,7 @@ async def test_get_repository_returns_instance_after_initialize(
     import openframe.adapters.db.mongo.connection as conn_module
     from openframe.adapters.db.mongo import MongoRepository
 
-    conn_module._client_cache[mock_settings.mongo_url] = mock_client
+    conn_module._client_cache[conn_module._cache_key(mock_settings)] = mock_client
     mock_client.admin.command.return_value = {"ok": 1}
     plugin._settings = mock_settings
     await plugin.initialize(plugin_context)
@@ -166,7 +166,7 @@ async def test_health_returns_ready_after_initialize(
 ):
     """health() after successful init delegates to repo.health() → READY."""
     import openframe.adapters.db.mongo.connection as conn_module
-    conn_module._client_cache[mock_settings.mongo_url] = mock_client
+    conn_module._client_cache[conn_module._cache_key(mock_settings)] = mock_client
     monkeypatch.setattr(
         MongoRepository,
         "health",
@@ -185,7 +185,7 @@ async def test_health_returns_failed_when_repo_health_fails(
 ):
     """health() delegates to repo.health() → FAILED status surfaces, no exception raised."""
     import openframe.adapters.db.mongo.connection as conn_module
-    conn_module._client_cache[mock_settings.mongo_url] = mock_client
+    conn_module._client_cache[conn_module._cache_key(mock_settings)] = mock_client
     monkeypatch.setattr(
         MongoRepository,
         "health",
@@ -240,7 +240,7 @@ async def test_initialize_constructs_custom_repository_class(
     class CustomRepo(MongoRepository):
         marker = True
 
-    conn_module._client_cache[mock_settings.mongo_url] = mock_client
+    conn_module._client_cache[conn_module._cache_key(mock_settings)] = mock_client
     mock_client.admin.command.return_value = {"ok": 1}
 
     plugin = MongoPlugin(mock_settings, collection="x", repository_class=CustomRepo)
@@ -261,7 +261,7 @@ async def test_get_repository_returns_subclass_not_base_class(
     class CustomRepo(MongoRepository):
         pass
 
-    conn_module._client_cache[mock_settings.mongo_url] = mock_client
+    conn_module._client_cache[conn_module._cache_key(mock_settings)] = mock_client
     mock_client.admin.command.return_value = {"ok": 1}
 
     plugin = MongoPlugin(mock_settings, collection="x", repository_class=CustomRepo)
@@ -283,7 +283,7 @@ class TestMongoPluginContracts(PortContractTests):
     def port(self, mock_settings, mock_client) -> MongoPlugin:
         import openframe.adapters.db.mongo.connection as conn_module
 
-        conn_module._client_cache[mock_settings.mongo_url] = mock_client
+        conn_module._client_cache[conn_module._cache_key(mock_settings)] = mock_client
         mock_client.admin.command.return_value = {"ok": 1}
 
         plugin = MongoPlugin(mock_settings, collection="artifacts")

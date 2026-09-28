@@ -11,7 +11,7 @@ import pymongo.errors
 import pytest
 
 from openframe.adapters.db.mongo import MongoSettings, get_mongo_client
-from openframe.adapters.db.mongo.connection import _client_cache
+from openframe.adapters.db.mongo.connection import _cache_key, _client_cache
 from openframe.core.exceptions import AdapterConfigurationError
 
 
@@ -76,7 +76,33 @@ class TestGetMongoClient:
         ):
             get_mongo_client(settings)
 
-        assert _client_cache[settings.mongo_url] is fake_client
+        assert _client_cache[_cache_key(settings)] is fake_client
+
+    def test_same_url_different_pool_size_produces_different_clients(
+        self, settings: MongoSettings
+    ) -> None:
+        """
+        Regression test: two Settings for the SAME mongo_url but different
+        mongo_max_pool_size must NOT share a client — the second caller
+        must not silently inherit the first caller's pool configuration.
+        """
+        settings_bigger_pool = MongoSettings(
+            mongo_url=settings.mongo_url,
+            mongo_database=settings.mongo_database,
+            mongo_max_pool_size=100,
+        )
+        client_small = MagicMock(name="client_small")
+        client_big = MagicMock(name="client_big")
+        with patch(
+            "openframe.adapters.db.mongo.connection.AsyncIOMotorClient",
+            side_effect=[client_small, client_big],
+        ):
+            c1 = get_mongo_client(settings)
+            c2 = get_mongo_client(settings_bigger_pool)
+
+        assert c1 is not c2
+        assert c1 is client_small
+        assert c2 is client_big
 
     def test_configuration_error_raises_adapter_configuration_error(
         self, settings: MongoSettings

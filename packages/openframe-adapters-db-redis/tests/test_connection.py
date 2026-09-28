@@ -12,7 +12,7 @@ import pytest
 import redis.exceptions
 
 from openframe.adapters.db.redis import RedisSettings
-from openframe.adapters.db.redis.connection import _client_cache, get_redis_client
+from openframe.adapters.db.redis.connection import _cache_key, _client_cache, get_redis_client
 from openframe.core.exceptions import AdapterConnectionError, AdapterTimeoutError
 
 
@@ -22,7 +22,7 @@ class TestGetRedisClient:
     ) -> None:
         """Second call with same URL returns the exact same client object."""
         import openframe.adapters.db.redis.connection as conn_module
-        conn_module._client_cache[mock_settings.redis_url] = mock_redis
+        conn_module._client_cache[conn_module._cache_key(mock_settings)] = mock_redis
 
         client1 = await get_redis_client(mock_settings)
         client2 = await get_redis_client(mock_settings)
@@ -40,23 +40,48 @@ class TestGetRedisClient:
 
         client_a = MagicMock()
         client_b = MagicMock()
-        conn_module._client_cache[settings_a.redis_url] = client_a
-        conn_module._client_cache[settings_b.redis_url] = client_b
+        conn_module._client_cache[conn_module._cache_key(settings_a)] = client_a
+        conn_module._client_cache[conn_module._cache_key(settings_b)] = client_b
 
         result_a = await get_redis_client(settings_a)
         result_b = await get_redis_client(settings_b)
         assert result_a is not result_b
         conn_module._client_cache.clear()
 
+    async def test_same_url_different_pool_size_produces_different_clients(
+        self, mock_redis: MagicMock
+    ) -> None:
+        """
+        Regression test: two Settings for the SAME redis_url but different
+        redis_max_connections must NOT share a client — the second caller
+        must not silently inherit the first caller's pool configuration.
+        """
+        import openframe.adapters.db.redis.connection as conn_module
+
+        settings_small = RedisSettings(redis_url="redis://host:6379/0", redis_max_connections=10)
+        settings_big = RedisSettings(redis_url="redis://host:6379/0", redis_max_connections=100)
+
+        client_small = MagicMock(name="client_small")
+        client_big = MagicMock(name="client_big")
+        conn_module._client_cache[conn_module._cache_key(settings_small)] = client_small
+        conn_module._client_cache[conn_module._cache_key(settings_big)] = client_big
+
+        result_small = await get_redis_client(settings_small)
+        result_big = await get_redis_client(settings_big)
+        assert result_small is not result_big
+        assert result_small is client_small
+        assert result_big is client_big
+        conn_module._client_cache.clear()
+
     async def test_client_stored_in_cache_keyed_by_url(
         self, mock_settings: RedisSettings, mock_redis: MagicMock
     ) -> None:
-        """After get_redis_client(), the cache contains the client at the URL key."""
+        """After get_redis_client(), the cache contains the client at the cache key."""
         import openframe.adapters.db.redis.connection as conn_module
-        conn_module._client_cache[mock_settings.redis_url] = mock_redis
+        conn_module._client_cache[conn_module._cache_key(mock_settings)] = mock_redis
 
         await get_redis_client(mock_settings)
-        assert mock_settings.redis_url in conn_module._client_cache
+        assert conn_module._cache_key(mock_settings) in conn_module._client_cache
         conn_module._client_cache.clear()
 
     async def test_connection_error_raises_adapter_connection_error(

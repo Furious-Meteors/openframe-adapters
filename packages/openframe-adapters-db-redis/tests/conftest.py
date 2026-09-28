@@ -52,7 +52,7 @@ def repo(mock_settings, mock_redis):
     from openframe.adapters.db.redis import RedisRepository
     import openframe.adapters.db.redis.connection as conn_module
 
-    conn_module._client_cache[mock_settings.redis_url] = mock_redis
+    conn_module._client_cache[conn_module._cache_key(mock_settings)] = mock_redis
     r = RedisRepository(mock_settings)
     yield r
     conn_module._client_cache.clear()

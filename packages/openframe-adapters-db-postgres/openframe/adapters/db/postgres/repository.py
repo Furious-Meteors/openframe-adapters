@@ -45,7 +45,7 @@ from openframe.core.exceptions import (
 from openframe.core.ports import BaseRepository, Capability, PluginContext, PluginHealth, PluginStatus
 
 from .config import PostgresSettings
-from .connection import _pool_cache, get_postgres_pool
+from .connection import _cache_key, _pool_cache, get_postgres_pool
 
 __all__ = ["PostgresRepository"]
 
@@ -397,10 +397,11 @@ class PostgresRepository(Generic[T]):
         Call once at application shutdown. After this returns the pool is
         closed and a subsequent operation will create a new pool.
         """
-        pool = _pool_cache.get(self._settings.database_url)
+        key = _cache_key(self._settings)
+        pool = _pool_cache.get(key)
         if pool is not None:
             await pool.close()
-            _pool_cache.pop(self._settings.database_url, None)
+            _pool_cache.pop(key, None)
 
     # ------------------------------------------------------------------
     # BasePort (Identity + Lifecycle) interface

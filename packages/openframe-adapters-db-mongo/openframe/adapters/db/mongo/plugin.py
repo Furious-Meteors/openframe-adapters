@@ -79,7 +79,7 @@ class MongoPlugin(BasePort):
     """
 
     name:       str = "openframe-mongo"
-    version:    str = "2.0.3"
+    version:    str = "2.0.4"
     capability: Capability = Capability.PERSISTENCE
 
     def __init__(

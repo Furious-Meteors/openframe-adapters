@@ -13,8 +13,12 @@ The actual TCP handshake happens on the first operation. This means:
   repository methods, not here.
 - Only syntactic URL errors raise immediately (``pymongo.errors.ConfigurationError``).
 
-Cache: ``_client_cache`` is a module-level dict keyed by ``mongo_url``.
-Multiple ``MongoRepository`` instances in the same process share one client.
+Cache: ``_client_cache`` is a module-level dict keyed by
+``(mongo_url, pool-config-tuple)`` — not the URL alone. Two ``MongoSettings``
+for the same ``mongo_url`` but different pool sizing get two distinct
+clients, rather than the second one silently inheriting the first one's
+configuration. Multiple ``MongoRepository`` instances with matching
+settings share one client.
 """
 from __future__ import annotations
 
@@ -25,9 +29,31 @@ from openframe.core.exceptions import AdapterConfigurationError
 
 from .config import MongoSettings
 
-__all__ = ["get_mongo_client", "_client_cache"]
+__all__ = ["get_mongo_client", "_client_cache", "_cache_key"]
 
-_client_cache: dict[str, AsyncIOMotorClient] = {}  # type: ignore[type-arg]
+_ClientCacheKey = tuple[str, tuple[int, int, int, bool, bool]]
+
+_client_cache: dict[_ClientCacheKey, AsyncIOMotorClient] = {}  # type: ignore[type-arg]
+
+
+def _cache_key(settings: MongoSettings) -> _ClientCacheKey:
+    """
+    Cache key covering the URL plus every pool-shape setting.
+
+    Two ``MongoSettings`` for the same ``mongo_url`` but different pool
+    sizing must not share a client — a shared key here would mean the
+    second caller silently gets the first caller's pool configuration.
+    """
+    return (
+        settings.mongo_url,
+        (
+            settings.mongo_min_pool_size,
+            settings.mongo_max_pool_size,
+            settings.mongo_server_selection_timeout_ms,
+            settings.mongo_tls,
+            settings.mongo_tls_allow_invalid_certs,
+        ),
+    )
 
 
 def get_mongo_client(settings: MongoSettings) -> AsyncIOMotorClient:  # type: ignore[type-arg]
@@ -38,9 +64,10 @@ def get_mongo_client(settings: MongoSettings) -> AsyncIOMotorClient:  # type: ig
     immediately — the connection is established lazily on the first
     operation. This function therefore requires no ``await``.
 
-    The client is cached per ``mongo_url``. Multiple ``MongoRepository``
-    instances in the same process share the same underlying client and its
-    connection pool.
+    The client is cached per ``(mongo_url, pool config)`` pair. Multiple
+    ``MongoRepository`` instances with matching settings share the same
+    underlying client and its connection pool; different pool settings for
+    the same URL get their own client instead of reusing the first one's.
 
     Args:
         settings: A fully-validated ``MongoSettings`` instance.
@@ -53,8 +80,9 @@ def get_mongo_client(settings: MongoSettings) -> AsyncIOMotorClient:  # type: ig
                                    (``pymongo.errors.ConfigurationError``).
     """
     url = settings.mongo_url
-    if url in _client_cache:
-        return _client_cache[url]
+    key = _cache_key(settings)
+    if key in _client_cache:
+        return _client_cache[key]
 
     try:
         kwargs: dict = {
@@ -74,5 +102,5 @@ def get_mongo_client(settings: MongoSettings) -> AsyncIOMotorClient:  # type: ig
             cause=exc,
         ) from exc
 
-    _client_cache[url] = client
+    _client_cache[key] = client
     return client

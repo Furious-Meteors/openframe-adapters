@@ -50,7 +50,7 @@ from openframe.core.exceptions import (
 from openframe.core.ports import BaseRepository
 
 from .config import MongoSettings
-from .connection import _client_cache, get_mongo_client
+from .connection import _cache_key, _client_cache, get_mongo_client
 
 __all__ = ["MongoRepository"]
 
@@ -407,7 +407,7 @@ class MongoRepository(Generic[T]):
         After this returns the client is closed; a subsequent operation will
         create a new client.
         """
-        client = _client_cache.pop(self._settings.mongo_url, None)
+        client = _client_cache.pop(_cache_key(self._settings), None)
         if client is not None:
             client.close()
 

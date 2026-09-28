@@ -127,6 +127,13 @@ class KafkaConsumer(Generic[T]):
             "bootstrap_servers": self._settings.kafka_bootstrap_servers,
             "group_id": self._settings.kafka_group_id,
             "auto_offset_reset": self._settings.kafka_auto_offset_reset,
+            # Load-bearing for nack()'s correctness (see nack() below): with
+            # auto-commit disabled, a failed message's offset is simply never
+            # committed, so it's naturally redelivered on the next poll.
+            # nack() itself does nothing but log — it relies entirely on this
+            # flag staying False. Do not remove or default this to True
+            # without also giving nack() real redelivery logic (e.g. explicit
+            # seek-back) to replace what this currently provides for free.
             "enable_auto_commit": False,
             "max_poll_records": self._settings.kafka_max_poll_records,
             "session_timeout_ms": self._settings.kafka_session_timeout_ms,
@@ -213,6 +220,12 @@ class KafkaConsumer(Generic[T]):
 
         Does NOT commit the offset — the message will be redelivered
         on the next poll. Logs the failure. Never raises.
+
+        This method's correctness is entirely dependent on
+        ``enable_auto_commit=False`` in ``subscribe()``'s consumer kwargs
+        (see that flag's comment above) — this method takes no explicit
+        redelivery action itself (no seek-back), it relies on the offset
+        simply never having been committed.
 
         Args:
             message: The message that failed processing.

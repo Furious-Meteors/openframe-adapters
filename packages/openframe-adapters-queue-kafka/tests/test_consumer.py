@@ -148,6 +148,33 @@ class TestSubscribe:
 
         mock_consumer_client.commit.assert_not_called()
 
+    async def test_subscribe_constructs_consumer_with_auto_commit_disabled(
+        self,
+        consumer: KafkaConsumer,
+        mock_consumer_client: MagicMock,
+    ) -> None:
+        """
+        Regression test: nack()'s correctness depends entirely on
+        AIOKafkaConsumer being constructed with enable_auto_commit=False
+        (see the comment on that kwarg in consumer.py). The other two
+        tests above only prove *this adapter* never calls commit() after
+        a handler failure — they'd still pass even if this flag were
+        silently flipped to True, because the underlying client itself
+        would be auto-committing regardless of what this adapter does.
+        This test closes that gap by asserting the actual constructor
+        kwarg passed to AIOKafkaConsumer.
+        """
+        mock_consumer_client.__anext__ = AsyncMock(side_effect=[StopAsyncIteration])
+
+        with patch(
+            "openframe.adapters.queue.kafka.consumer.AIOKafkaConsumer",
+            return_value=mock_consumer_client,
+        ) as MockConsumer:
+            await consumer.subscribe(AsyncMock())
+
+        _, kwargs = MockConsumer.call_args
+        assert kwargs["enable_auto_commit"] is False
+
     async def test_subscribe_raises_adapter_connection_error_on_broker_failure(
         self,
         consumer: KafkaConsumer,

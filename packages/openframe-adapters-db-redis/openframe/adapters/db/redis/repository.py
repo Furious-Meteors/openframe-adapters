@@ -39,7 +39,7 @@ from openframe.core.exceptions import (
 from openframe.core.ports import BaseRepository
 
 from .config import RedisSettings
-from .connection import _client_cache, get_redis_client
+from .connection import _cache_key, _client_cache, get_redis_client
 
 __all__ = ["RedisRepository"]
 
@@ -395,7 +395,7 @@ class RedisRepository(Generic[T]):
         Call once at application shutdown. After this returns the client
         is closed; a subsequent operation will create a new client.
         """
-        client = _client_cache.pop(self._settings.redis_url, None)
+        client = _client_cache.pop(_cache_key(self._settings), None)
         if client is not None:
             await client.aclose()
 
