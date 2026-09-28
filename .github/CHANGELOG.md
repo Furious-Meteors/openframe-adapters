@@ -1,3 +1,56 @@
+## [postgres 2.0.4 / mongo 2.0.4 / redis 2.0.5 / kafka 1.4.5] - 2026-09-28
+
+### Fixed
+- **Connection-cache correctness (postgres, mongo, redis)** — the
+  module-level pool/client cache in each package's `connection.py`
+  (`_pool_cache`/`_client_cache`) was keyed only by connection URL. Two
+  `Settings` instances for the same URL but different pool sizing
+  (`pool_size`, `mongo_max_pool_size`, `redis_max_connections`, etc.)
+  silently shared one pool/client — the second caller's pool
+  configuration was discarded without warning. A real footgun for any
+  multi-tenant or multi-config deployment. Fixed by widening the cache
+  key to `(url, pool-config-tuple)` via a new `_cache_key()` helper in
+  each `connection.py`, exported and reused by the repository's `close()`
+  and every test that injects into the cache directly. Same URL + same
+  config still hits the cache exactly as before (no behavior change for
+  the common case); same URL + different config now gets its own
+  pool/client instead of silently inheriting the first one's.
+- **Kafka `nack()` fragility** — `nack()` does nothing but log; its
+  correctness depends entirely on `subscribe()`'s hardcoded
+  `enable_auto_commit=False` never changing, and nothing tested that
+  invariant directly (only that *this adapter* never calls `commit()`
+  itself after a handler failure — which would still pass even if
+  auto-commit were silently enabled at the client level). Added a
+  code comment cross-referencing the coupling at both the flag and at
+  `nack()`'s own docstring, plus a regression test asserting
+  `enable_auto_commit=False` is actually passed to the `AIOKafkaConsumer`
+  constructor. Verified the new test fails on a temporarily-reverted
+  version of the flag and passes once restored.
+
+### Added
+- **`docs/adapter-checklist.md`** — the concrete robustness checklist
+  every adapter package in this repo follows, extracted from the two
+  fixes above plus prior fixes this release cycle (Postgres's
+  connection/query exception misclassification, the `RedisPlugin`/
+  `KafkaPlugin` domain-subclass-injection gaps). Each item cites the
+  specific real bug it prevents rather than reading as abstract best
+  practice. Linked from the top-level `README.md`'s new "Adapter
+  development" section. Will serve as the spec for a later, separate
+  effort to build out the 11 other advertised-but-unimplemented adapter
+  packages.
+- **Resilience documentation** — both `README.md` (top-level and meta
+  package) now document `openframe-core>=3.4`'s new
+  `openframe.core.resilience.CircuitBreakerProxy` as an optional
+  composition-root addition (wrap the traced repository, not the
+  reverse, so a short-circuited call never produces a misleading adapter
+  span). No adapter code changes required — it's an opt-in wrapper, like
+  `TracingProxy`.
+- Corrected the meta package's `README.md` "Core dependency" section,
+  which still said `openframe-core>=3.0,<4` — stale since the pin was
+  actually tightened to `>=3.3,<4` in the prior release.
+
+---
+
 ## [postgres 2.0.3 / mongo 2.0.3 / redis 2.0.4 / kafka 1.4.4] - 2026-09-28
 
 ### Fixed
