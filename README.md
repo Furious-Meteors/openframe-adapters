@@ -23,7 +23,7 @@
 
 `postgres`, `mongo`, `redis`, and `kafka` pin `openframe-core>=3.0,<4` as of this release; other adapters in this family may still be on an earlier major until migrated — check each package's own `pyproject.toml`. The major version is the stability contract.
 
-`openframe-adapters-db-postgres`/`-mongo` are at **2.0.3**, `-redis` is at **2.0.4** — `ping()`/`is_ready()` (deprecated, then removed in `2.0.0`) are gone; `health()` is the sole health check. `openframe-adapters-queue-kafka` is at **1.4.4** (non-breaking throughout). All four now require `openframe-core>=3.3` and wire through `ApplicationBootstrap.compose()` — see [Wiring with ApplicationBootstrap](#wiring-with-applicationbootstrap) below.
+`openframe-adapters-db-postgres`/`-mongo` are at **2.0.4**, `-redis` is at **2.0.5** — `ping()`/`is_ready()` (deprecated, then removed in `2.0.0`) are gone; `health()` is the sole health check. `openframe-adapters-queue-kafka` is at **1.4.5** (non-breaking throughout). All four now require `openframe-core>=3.3` and wire through `ApplicationBootstrap.compose()` — see [Wiring with ApplicationBootstrap](#wiring-with-applicationbootstrap) below.
 
 Every `*Plugin` now supports domain subclass registration consistently: `repository_class` (Postgres, Mongo, Redis), `producer_class` and `consumer_class` (Kafka) — pass a subclass that overrides entity mapping/serialisation and `get_repository()`/`get_producer()`/`make_consumer()` return it, not the plain base class.
 
@@ -374,6 +374,34 @@ app = FastAPI(lifespan=lifespan)
 ```
 
 Swap the adapter — change two lines in `deps.py`, update one env var. Zero changes to business logic. `compose()` also accepts several ports at once (`ApplicationBootstrap.compose(repo, cache, producer)`) for a multi-adapter service; reach for a `configure()` subclass instead once an adapter needs its own `config=`/`init_timeout=`, or registration order that depends on a runtime condition — see `openframe-core`'s [Choosing a Wiring Pattern](https://github.com/Furious-Meteors/openframe-core/blob/production/docs/developer-guide/how-it-works.md#choosing-a-wiring-pattern) guide.
+
+### Resilience — circuit breaking under sustained failure
+
+`openframe-core>=3.4` ships `openframe.core.resilience.CircuitBreakerProxy` — wrap a repository/producer to short-circuit calls after repeated failures instead of blocking every caller until `operation_timeout` during a sustained outage:
+
+```python
+from openframe.core.resilience import CircuitBreakerProxy
+from openframe.core.tracing import TracingProxy
+
+repo = CircuitBreakerProxy(
+    TracingProxy(app.get(Capability.PERSISTENCE).get_repository(), prefix="repository.item"),
+    failure_threshold=5,
+    reset_timeout=30.0,
+)
+```
+
+Wrap the traced repository, not the reverse — a short-circuited call never reaches the adapter, so it shouldn't produce a misleading adapter span.
+
+---
+
+## Adapter development
+
+Building a new adapter package, or auditing an existing one? See
+[`docs/adapter-checklist.md`](docs/adapter-checklist.md) — the concrete
+checklist every package in this repo follows, extracted from real bugs
+found and fixed during a hardening pass (connection-cache correctness,
+connection-vs-query exception classification, domain-subclass injection,
+and more).
 
 ---
 
