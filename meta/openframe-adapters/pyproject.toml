@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "openframe-adapters"
-version = "2.0.4"
+version = "2.1.0"
 description = "OpenFrame Microservice Suite - adapter meta-package. Install adapters by name or group."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -53,8 +53,8 @@ qdrant     = ["openframe-adapters-db-qdrant>=1.1,<2"]
 faiss      = ["openframe-adapters-db-faiss>=1.1,<2"]
 falkordb   = ["openframe-adapters-db-falkordb>=1.1,<2"]
 kafka      = ["openframe-adapters-queue-kafka>=1.4,<2"]
-nats       = ["openframe-adapters-queue-nats>=1.1,<2"]
-rabbitmq   = ["openframe-adapters-queue-rabbitmq>=1.1,<2"]
+nats       = ["openframe-adapters-queue-nats>=0.1,<1"]
+rabbitmq   = ["openframe-adapters-queue-rabbitmq>=0.1,<1"]
 db = [
     "openframe-adapters[postgres]",
     "openframe-adapters[mysql]",

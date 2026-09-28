@@ -1,3 +1,15 @@
+## [nats 0.1.0 / rabbitmq 0.1.0 / meta 2.1.0] - 2026-09-28
+
+### Added
+- **`openframe-adapters-queue-nats`** (new package, `0.1.0`) — `NatsProducer[T]`/`NatsConsumer[T]`/`NatsPlugin`, built against JetStream (not core NATS) specifically because core NATS pub/sub has no ack/nack/persistence — `BaseConsumer.ack()`/`.nack()` would be meaningless without it. Uses `manual_ack=True` durable consumers for real at-least-once semantics matching what `KafkaConsumer` provides via manual offset commit. New `errors.py` module holds a shared `wrap_nats()` classification helper (Kafka's single-file-per-role structure didn't need one since it only has two call sites; NATS producer+consumer share it to avoid duplicating the connection-error tuple). Exception hierarchy (`nats.errors.*`/`nats.js.errors.*`) verified against the actually-installed driver, not guessed. 117 tests, all passing; two real regressions (connection-vs-query misclassification, plugin discarding the injected subclass) verified red-then-green.
+- **`openframe-adapters-queue-rabbitmq`** (new package, `0.1.0`) — `RabbitmqProducer[T]`/`RabbitmqConsumer[T]`/`RabbitmqPlugin`, built on `aio-pika`'s `connect_robust()` (auto-reconnecting, fully async-native). Consumer uses `queue.iterator()` so `subscribe()` keeps the same `async for msg in ...` polling shape as Kafka. Found and regression-tested a genuine `_wrap_rabbitmq()` gotcha analogous to Postgres's `asyncpg.InterfaceError` issue: `connect_robust()` can raise a raw `OSError` before `aio_pika` wraps it in an `AMQPConnectionError` — confirmed by reading `aio_pika`'s own `CONNECTION_EXCEPTIONS` tuple in its source, which explicitly includes `OSError` for the same reason. 128 tests, all passing; verified red-then-green the same way as NATS.
+- Both packages follow `docs/adapter-checklist.md` in full — first real proof the checklist holds up against genuinely new drivers, not just the four packages it was extracted from.
+
+### Fixed
+- Meta package (`openframe-adapters`) — the `nats`/`rabbitmq` extras had placeholder pins (`>=1.1,<2`) left over from before either package existed for real; corrected to `>=0.1,<1` to match the packages' actual starting version. Bumped meta package to `2.1.0` (minor — two extras that previously installed nothing real now install working adapters, a meaningful new capability from the meta package's own consumer-facing perspective).
+
+---
+
 ## [postgres 2.0.4 / mongo 2.0.4 / redis 2.0.5 / kafka 1.4.5] - 2026-09-28
 
 ### Fixed
