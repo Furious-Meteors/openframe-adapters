@@ -22,6 +22,11 @@ jobs:
     strategy:
       # false: run all matrix combinations even if one fails.
       fail-fast: false
+      # 17 packages × 4 Python versions = 68 jobs. Uncapped, GitHub Actions
+      # fires all of them at once — 68 simultaneous `pip install` calls
+      # against PyPI have been observed to trip its rate limiter (HTTP
+      # 429). Capping concurrency batches the matrix instead.
+      max-parallel: 6
       matrix:
         python-version: ["3.11", "3.12", "3.13", "3.14"]
         package:

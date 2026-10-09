@@ -19,6 +19,11 @@ jobs:
 
     strategy:
       fail-fast: false
+      # Without a cap, GitHub Actions fires all 18 matrix jobs at once —
+      # 18 simultaneous `pip install build` + PyPI publish requests have
+      # been observed to trip PyPI's rate limiter (HTTP 429). Capping
+      # concurrency batches the matrix instead of firing it all at once.
+      max-parallel: 4
       matrix:
         package:
           - packages/openframe-adapters-db-mongo
