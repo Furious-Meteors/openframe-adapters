@@ -137,12 +137,20 @@ celerybeat.pid
 *.pid
 
 # RabbitMQ
-mnesia/
-rabbitmq/
-rabbitmq-data/
+# Anchored to repo root (leading /) — unanchored patterns match a directory
+# of that name anywhere in the tree, which silently gitignored this repo's
+# own packages/openframe-adapters-queue-rabbitmq/openframe/adapters/queue/
+# rabbitmq/ adapter source (same leaf name as RabbitMQ's own runtime data
+# dir). That caused the adapter's source to never be pushed to GitHub,
+# so CI's checkout had no openframe/ directory for it at all — surfaced as
+# "ModuleNotFoundError: No module named 'openframe.adapters'" in CI, not a
+# packaging or namespace-package bug.
+/mnesia/
+/rabbitmq/
+/rabbitmq-data/
 
 # ActiveMQ
-activemq-data/
+/activemq-data/
 
 # SageMath parsed files
 *.sage.py
