@@ -15,6 +15,34 @@ on:
   workflow_call:
 
 jobs:
+  checklist:
+    name: Adapter checklist enforcement
+    runs-on: ubuntu-latest
+
+    # Runs scripts/check_adapter_checklist.py against every package —
+    # catches CI-matrix gaps, stale meta-extras pins, version drift
+    # between plugin.py and pyproject.toml, bare `from conftest import`
+    # test helpers, and openframe-core floors too low for the ports a
+    # package actually uses. See the script's own docstring for the
+    # exact incident each check traces back to.
+    #
+    # NOTE: the script's gitignore-collision check cannot catch anything
+    # here — by the time this job's checkout step runs, a gitignored
+    # file was never pushed in the first place, so there is nothing for
+    # the script to see. That specific check only has teeth as a
+    # pre-commit hook, run against the working tree before `git add`.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Run checklist enforcement
+        run: python scripts/check_adapter_checklist.py
+
   test:
     name: "${{ matrix.package }} — Python ${{ matrix.python-version }}"
     runs-on: ubuntu-latest

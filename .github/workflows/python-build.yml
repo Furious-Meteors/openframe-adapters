@@ -7,6 +7,25 @@ on:
 
   workflow_dispatch:
 
+  # Automatic re-trigger for PyPI's new-project-creation quota (see the
+  # release job's own strategy comment below for the full explanation).
+  # This is NOT a retry-on-failure mechanism — it does not re-run inside
+  # the same attempt, which is exactly what risks burning the rest of a
+  # day's quota on doomed retries. It is a once-daily, fully independent
+  # re-run of the whole pipeline (tests included), scheduled far enough
+  # apart that the quota has had a real chance to reset between
+  # attempts. skip-existing: true makes every run safe to repeat —
+  # packages that already published are free no-op skips; only the
+  # still-unpublished new packages actually attempt anything.
+  #
+  # Remove this schedule block once every package in the release matrix
+  # has confirmed-published at least once — its only purpose is working
+  # through the current backlog of brand-new, never-before-published
+  # project names. Leaving it running forever after that point just
+  # burns CI minutes on a job that will only ever no-op.
+  schedule:
+    - cron: "0 6 * * *"   # 06:00 UTC daily
+
 jobs:
   test:
     name: Run test suite
@@ -19,11 +38,32 @@ jobs:
 
     strategy:
       fail-fast: false
-      # Without a cap, GitHub Actions fires all 18 matrix jobs at once —
-      # 18 simultaneous `pip install build` + PyPI publish requests have
-      # been observed to trip PyPI's rate limiter (HTTP 429). Capping
-      # concurrency batches the matrix instead of firing it all at once.
-      max-parallel: 4
+      # max-parallel: 1 — this is NOT the same 429 the comment below used
+      # to describe. PyPI returns a DIFFERENT error, "429 Too many new
+      # projects created", which is an anti-abuse quota on first-time
+      # publishes of brand-new project names — observed (pypi/support,
+      # pypi/warehouse issue trackers) to lock out after roughly 4-8 new
+      # projects in one burst, REGARDLESS of concurrency. This repo has
+      # 13 never-before-published package names in this matrix, well past
+      # that threshold. Concurrency batching cannot fix a cross-request
+      # account quota — serializing to 1 only avoids making it worse by
+      # firing several new-project attempts in the same instant.
+      #
+      # DO NOT add automatic retry-on-429 here. Confirmed from real
+      # incident reports: a failed/rolled-back new-project upload still
+      # spends a quota hit, so retrying a 429 can burn the rest of a
+      # day's quota without ever succeeding. If this job fails with
+      # "Too many new projects created":
+      #   1. Do nothing automatic — wait. Already-published packages are
+      #      unaffected on the next run (skip-existing: true below), and
+      #      this quota only ever applies to a project's FIRST publish —
+      #      once a package has published once, it never hits this again.
+      #   2. For a faster one-time fix, file a "Limit Request" issue at
+      #      https://github.com/pypi/support/issues (the documented,
+      #      sanctioned path other projects use for exactly this —
+      #      a coordinated monorepo release with many new projects at
+      #      once) asking for a temporary lift tied to this repository.
+      max-parallel: 1
       matrix:
         package:
           - packages/openframe-adapters-db-mongo
