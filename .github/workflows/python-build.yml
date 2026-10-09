@@ -27,14 +27,34 @@ jobs:
           - packages/openframe-adapters-db-cockroachdb
           - packages/openframe-adapters-db-mysql
           - packages/openframe-adapters-db-mariadb
+          - packages/openframe-adapters-db-oracle
+          - packages/openframe-adapters-db-dynamodb
+          - packages/openframe-adapters-db-cassandra
+          - packages/openframe-adapters-db-influxdb
           - packages/openframe-adapters-queue-kafka
           - packages/openframe-adapters-queue-nats
           - packages/openframe-adapters-queue-rabbitmq
+          - packages/openframe-adapters-db-qdrant
+          - packages/openframe-adapters-db-milvus
+          - packages/openframe-adapters-db-chromadb
+          - packages/openframe-adapters-db-falkordb
           - meta/openframe-adapters
 
     environment:
       name: pypi
       url: https://pypi.org/search/?q=openframe
+
+    # PyPI Trusted Publishing (OIDC) — no long-lived API token required,
+    # once configured. Each package needs its own trusted publisher entry
+    # (one per PyPI project), configured at:
+    #   https://pypi.org/manage/project/<package-name>/settings/publishing/
+    # with:
+    #   Owner:    <your GitHub org/user>
+    #   Repo:     openframe-adapters
+    #   Workflow: python-build.yml
+    #   Env:      pypi
+    permissions:
+      id-token: write   # required for OIDC trusted publishing
 
     steps:
       - name: Checkout
@@ -56,9 +76,15 @@ jobs:
           ls -lh dist/
 
       # ── Publish ───────────────────────────────────────────────────────────
+      # Phase 1 (new package): PYPI_API_TOKEN org secret present → token auth.
+      # Phase 2 (established package): trusted publisher configured on PyPI →
+      #   OIDC auth; the action ignores the token once OIDC takes precedence.
+      # Same workflow file per package, no edits needed when transitioning
+      # between phases — matches openframe-core's own python-build.yml.
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: ${{ matrix.package }}/dist/
           password: ${{ secrets.PYPI_API_TOKEN }}
           skip-existing: true
+          attestations: false

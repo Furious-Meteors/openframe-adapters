@@ -31,9 +31,17 @@ jobs:
           - openframe-adapters-db-cockroachdb
           - openframe-adapters-db-mysql
           - openframe-adapters-db-mariadb
+          - openframe-adapters-db-oracle
+          - openframe-adapters-db-dynamodb
+          - openframe-adapters-db-cassandra
+          - openframe-adapters-db-influxdb
           - openframe-adapters-queue-kafka
           - openframe-adapters-queue-nats
           - openframe-adapters-queue-rabbitmq
+          - openframe-adapters-db-qdrant
+          - openframe-adapters-db-milvus
+          - openframe-adapters-db-chromadb
+          - openframe-adapters-db-falkordb
 
     defaults:
       run:

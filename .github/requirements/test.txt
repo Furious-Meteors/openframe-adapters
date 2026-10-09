@@ -1,14 +1,15 @@
 # Test dependencies for openframe-adapters local development
 #
-# CI does NOT use this file.
-# Each adapter installs its own dev extras directly:
-#   cd packages/openframe-adapters-db-postgres && pip install -e ".[dev]"
-#   cd packages/openframe-adapters-db-mongo    && pip install -e ".[dev]"
-#
-# This file is a convenience shortcut for running all adapter tests locally
-# from the repo root without entering each package directory:
+# CI does NOT use this file — each package's own app-test.yml matrix row
+# installs that package's dev extras directly (pip install -e ".[dev]"),
+# isolated per package. This file exists purely as a local-dev convenience
+# shortcut for running every adapter's tests in one shared environment from
+# the repo root, without entering each package directory one at a time:
 #   pip install -r .github/requirements/test.txt
 #   pytest packages/
+#
+# Keep in sync with every package's pyproject.toml when adding a package or
+# bumping a runtime dependency floor — nothing enforces this automatically.
 
 # ── Test runner ───────────────────────────────────────────────────────────
 pytest>=8.0
@@ -17,15 +18,60 @@ pytest-mock>=3.14
 
 # ── Adapter runtime deps ──────────────────────────────────────────────────
 # Pinned at minimum supported floors — mirrors each adapter's pyproject.toml.
+# Where two packages share a driver (mysql/mariadb → aiomysql,
+# postgres/cockroachdb → asyncpg), the floor is listed once.
 
-# openframe-adapters-db-postgres
+# openframe-adapters-db-postgres / -db-cockroachdb
 asyncpg>=0.29
 
 # openframe-adapters-db-mongo
 motor>=3.3
 pymongo>=4.6
 
+# openframe-adapters-db-redis
+redis>=5.0
+
+# openframe-adapters-db-mysql / -db-mariadb
+aiomysql>=0.2
+
+# openframe-adapters-db-oracle
+oracledb>=2.0
+
+# openframe-adapters-db-dynamodb
+aioboto3>=13.0
+
+# openframe-adapters-db-cassandra
+cassandra-driver>=3.29
+
+# openframe-adapters-db-influxdb
+influxdb-client[async]>=1.40
+
+# openframe-adapters-db-qdrant
+qdrant-client>=1.9
+
+# openframe-adapters-db-milvus
+pymilvus>=2.5
+
+# openframe-adapters-db-chromadb
+chromadb>=0.5,<2
+
+# openframe-adapters-db-falkordb
+falkordb>=1.7,<2
+
+# openframe-adapters-queue-kafka
+aiokafka>=0.11
+
+# openframe-adapters-queue-nats
+nats-py>=2.7
+
+# openframe-adapters-queue-rabbitmq
+aio-pika>=9.4
+
 # ── Shared transitive dep ─────────────────────────────────────────────────
-# openframe-core is a direct dependency of every adapter package.
-# Pinned here to lock the local environment against the minimum supported version.
-openframe-core>=1.0,<2
+# openframe-core is a direct dependency of every adapter package. Pinned
+# here at the STRICTEST floor among all packages (falkordb/qdrant/milvus/
+# chromadb need BaseGraphStore/BaseVectorStore, only present from 3.5+/3.6+)
+# — older packages' own looser floors (e.g. postgres's >=3.3,<4) are still
+# satisfied by anything >=3.6,<4, so this does not understate what any
+# individual package actually requires.
+openframe-core>=3.6,<4
