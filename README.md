@@ -39,6 +39,7 @@ pip install openframe-adapters[postgres]
 pip install openframe-adapters[cockroachdb]
 pip install openframe-adapters[mysql]
 pip install openframe-adapters[mariadb]
+pip install openframe-adapters[oracle]
 
 # Key-value
 pip install openframe-adapters[redis]
@@ -69,7 +70,7 @@ pip install openframe-adapters[rabbitmq]
 ### Group — one category
 
 ```bash
-pip install openframe-adapters[db]        # all 9 DB adapters (relational + document + columnar + time-series)
+pip install openframe-adapters[db]        # all 10 DB adapters (relational + document + columnar + time-series)
 pip install openframe-adapters[vector]    # milvus + chromadb + qdrant + faiss + falkordb
 pip install openframe-adapters[queue]     # kafka + nats + rabbitmq
 ```
@@ -85,7 +86,7 @@ pip install openframe-adapters[research-min]  # mongo + redis — Research Vault
 ### Everything
 
 ```bash
-pip install openframe-adapters[all]       # all 17 adapter packages
+pip install openframe-adapters[all]       # all 18 adapter packages
 ```
 
 ---
@@ -98,16 +99,17 @@ pip install openframe-adapters[all]       # all 17 adapter packages
 | `[cockroachdb]` | `openframe-adapters-db-cockroachdb` | asyncpg | native | Relational |
 | `[mysql]` | `openframe-adapters-db-mysql` | aiomysql | native | Relational |
 | `[mariadb]` | `openframe-adapters-db-mariadb` | aiomysql | native | Relational |
+| `[oracle]` | `openframe-adapters-db-oracle` | oracledb | native | Relational |
 | `[redis]` | `openframe-adapters-db-redis` | redis-py | native | Key-value |
 | `[dynamodb]` | `openframe-adapters-db-dynamodb` | aioboto3 | wrapper | Key-value |
 | `[mongo]` | `openframe-adapters-db-mongo` | motor | native | Document |
-| `[cassandra]` | `openframe-adapters-db-cassandra` | cassandra-driver | executor | Columnar |
+| `[cassandra]` | `openframe-adapters-db-cassandra` | cassandra-driver | hybrid (callback-bridge + executor connect) | Columnar |
 | `[influxdb]` | `openframe-adapters-db-influxdb` | influxdb-client | native | Time-series |
-| `[milvus]` | `openframe-adapters-db-milvus` | pymilvus | executor | Vector |
+| `[milvus]` | `openframe-adapters-db-milvus` | pymilvus | native | Vector |
 | `[chromadb]` | `openframe-adapters-db-chromadb` | chromadb | native | Vector |
 | `[qdrant]` | `openframe-adapters-db-qdrant` | qdrant-client | native | Vector |
 | `[faiss]` | `openframe-adapters-db-faiss` | faiss-cpu | executor | Vector |
-| `[falkordb]` | `openframe-adapters-db-falkordb` | falkordb | executor | Graph |
+| `[falkordb]` | `openframe-adapters-db-falkordb` | falkordb | native | Graph |
 | `[kafka]` | `openframe-adapters-queue-kafka` | aiokafka | native | Queue |
 | `[nats]` | `openframe-adapters-queue-nats` | nats-py | native | Queue |
 | `[rabbitmq]` | `openframe-adapters-queue-rabbitmq` | aio-pika | native | Queue |
@@ -338,7 +340,7 @@ Adapter-specific variables — see each package's documentation:
 | MongoDB | `MONGO_URL`, `MONGO_DATABASE`, `MONGO_MAX_POOL_SIZE` |
 | Redis | `REDIS_URL` |
 | Kafka | `KAFKA_BOOTSTRAP_SERVERS`, `KAFKA_GROUP_ID` |
-| Milvus | `MILVUS_HOST`, `MILVUS_PORT`, `MILVUS_COLLECTION` |
+| Milvus | `MILVUS_URI`, `MILVUS_TOKEN`, `MILVUS_DB_NAME` |
 
 ---
 
