@@ -25,7 +25,6 @@ from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapProp
 
 from openframe.adapters.queue.rabbitmq import RabbitmqConsumer, RabbitmqSettings
 
-from conftest import _make_mock_queue_iterator
 
 _propagator = TraceContextTextMapPropagator()
 
@@ -51,13 +50,13 @@ def _make_settings() -> RabbitmqSettings:
     )
 
 
-def _mock_connection_stack(raw_msg):
+def _mock_connection_stack(raw_msg, make_mock_queue_iterator):
     """Wire up a mocked connection/channel/queue delivering ``raw_msg`` once."""
     exporter_channel = MagicMock()
     exporter_channel.set_qos = AsyncMock()
 
     mock_queue = MagicMock()
-    mock_queue.iterator = MagicMock(return_value=_make_mock_queue_iterator([raw_msg]))
+    mock_queue.iterator = MagicMock(return_value=make_mock_queue_iterator([raw_msg]))
 
     exporter_channel.declare_queue = AsyncMock(return_value=mock_queue)
     exporter_channel.close = AsyncMock()
@@ -68,7 +67,7 @@ def _mock_connection_stack(raw_msg):
     return mock_connection
 
 
-async def test_consumer_extracts_real_producer_injected_headers() -> None:
+async def test_consumer_extracts_real_producer_injected_headers(make_mock_queue_iterator) -> None:
     """
     Use the REAL producer's _inject_trace_headers() to build the headers,
     not a hand-built traceparent string — proves the two sides of this
@@ -108,7 +107,7 @@ async def test_consumer_extracts_real_producer_injected_headers() -> None:
             pass
 
     consumer = RabbitmqConsumer(_make_settings())
-    mock_connection = _mock_connection_stack(raw_msg)
+    mock_connection = _mock_connection_stack(raw_msg, make_mock_queue_iterator)
     from unittest.mock import patch
 
     with patch(
@@ -128,7 +127,7 @@ async def test_consumer_extracts_real_producer_injected_headers() -> None:
     raw_msg.ack.assert_called_once()
 
 
-async def test_consumer_with_no_headers_behaves_unchanged() -> None:
+async def test_consumer_with_no_headers_behaves_unchanged(make_mock_queue_iterator) -> None:
     """No traceparent present (e.g. a non-instrumented producer) — handler
     still runs normally, with no special parent context. Pure regression
     check: this must not break messages from producers that never call
@@ -141,7 +140,7 @@ async def test_consumer_with_no_headers_behaves_unchanged() -> None:
 
     handler = AsyncMock()
     consumer = RabbitmqConsumer(_make_settings())
-    mock_connection = _mock_connection_stack(raw_msg)
+    mock_connection = _mock_connection_stack(raw_msg, make_mock_queue_iterator)
     from unittest.mock import patch
 
     with patch(
@@ -154,7 +153,7 @@ async def test_consumer_with_no_headers_behaves_unchanged() -> None:
     raw_msg.ack.assert_called_once()
 
 
-async def test_consumer_decodes_byte_valued_headers() -> None:
+async def test_consumer_decodes_byte_valued_headers(make_mock_queue_iterator) -> None:
     """
     Interop guard: a non-Python producer (or a broker plugin) may send
     header values as raw AMQP long-strings that arrive as ``bytes`` rather
@@ -172,7 +171,7 @@ async def test_consumer_decodes_byte_valued_headers() -> None:
 
     handler = AsyncMock()
     consumer = RabbitmqConsumer(_make_settings())
-    mock_connection = _mock_connection_stack(raw_msg)
+    mock_connection = _mock_connection_stack(raw_msg, make_mock_queue_iterator)
     from unittest.mock import patch
 
     with patch(

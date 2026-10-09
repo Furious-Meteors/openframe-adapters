@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "openframe-adapters"
-version = "2.2.0"
+version = "2.7.0"
 description = "OpenFrame Microservice Suite - adapter meta-package. Install adapters by name or group."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -44,16 +44,17 @@ postgres   = ["openframe-adapters-db-postgres>=2.0,<3"]
 cockroachdb = ["openframe-adapters-db-cockroachdb>=0.1,<1"]
 mysql      = ["openframe-adapters-db-mysql>=0.1,<1"]
 mariadb    = ["openframe-adapters-db-mariadb>=0.1,<1"]
+oracle     = ["openframe-adapters-db-oracle>=0.1,<1"]
 redis      = ["openframe-adapters-db-redis>=2.0,<3"]
-dynamodb   = ["openframe-adapters-db-dynamodb>=1.1,<2"]
+dynamodb   = ["openframe-adapters-db-dynamodb>=0.1,<1"]
 mongo      = ["openframe-adapters-db-mongo>=2.0,<3"]
-cassandra  = ["openframe-adapters-db-cassandra>=1.1,<2"]
-influxdb   = ["openframe-adapters-db-influxdb>=1.1,<2"]
-milvus     = ["openframe-adapters-db-milvus>=1.1,<2"]
-chromadb   = ["openframe-adapters-db-chromadb>=1.1,<2"]
-qdrant     = ["openframe-adapters-db-qdrant>=1.1,<2"]
+cassandra  = ["openframe-adapters-db-cassandra>=0.1,<1"]
+influxdb   = ["openframe-adapters-db-influxdb>=0.1,<1"]
+milvus     = ["openframe-adapters-db-milvus>=0.1,<1"]
+chromadb   = ["openframe-adapters-db-chromadb>=0.1,<1"]
+qdrant     = ["openframe-adapters-db-qdrant>=0.1,<1"]
 faiss      = ["openframe-adapters-db-faiss>=1.1,<2"]
-falkordb   = ["openframe-adapters-db-falkordb>=1.1,<2"]
+falkordb   = ["openframe-adapters-db-falkordb>=0.1,<1"]
 kafka      = ["openframe-adapters-queue-kafka>=1.4,<2"]
 nats       = ["openframe-adapters-queue-nats>=0.1,<1"]
 rabbitmq   = ["openframe-adapters-queue-rabbitmq>=0.1,<1"]
@@ -62,6 +63,7 @@ db = [
     "openframe-adapters[cockroachdb]",
     "openframe-adapters[mysql]",
     "openframe-adapters[mariadb]",
+    "openframe-adapters[oracle]",
     "openframe-adapters[redis]",
     "openframe-adapters[dynamodb]",
     "openframe-adapters[mongo]",

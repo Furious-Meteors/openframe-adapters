@@ -16,10 +16,11 @@ pip install openframe-adapters[postgres]    # PostgreSQL via asyncpg
 pip install openframe-adapters[cockroachdb] # CockroachDB via asyncpg
 pip install openframe-adapters[mysql]       # MySQL via aiomysql
 pip install openframe-adapters[mariadb]     # MariaDB via aiomysql
+pip install openframe-adapters[oracle]      # Oracle via python-oracledb (thin mode async)
 
 # Key-value
 pip install openframe-adapters[redis]       # Redis via redis-py
-pip install openframe-adapters[dynamodb]    # DynamoDB via aiobotocore
+pip install openframe-adapters[dynamodb]    # DynamoDB via aioboto3
 
 # Document
 pip install openframe-adapters[mongo]       # MongoDB via Motor
@@ -46,7 +47,7 @@ pip install openframe-adapters[rabbitmq]    # RabbitMQ via aio-pika
 ### Groups — one category
 
 ```bash
-pip install openframe-adapters[db]       # all 9 DB adapters (relational + document + specialist)
+pip install openframe-adapters[db]       # all 10 DB adapters (relational + document + specialist)
 pip install openframe-adapters[vector]   # all 5 vector DB adapters
 pip install openframe-adapters[queue]    # all 3 queue adapters
 ```
@@ -54,7 +55,7 @@ pip install openframe-adapters[queue]    # all 3 queue adapters
 ### Everything
 
 ```bash
-pip install openframe-adapters[all]      # all 17 individual adapter packages
+pip install openframe-adapters[all]      # all 18 individual adapter packages
 ```
 
 ### Convenience combinations
@@ -230,15 +231,20 @@ ecosystem:
 
 | Capability | Adapters | Use for |
 |---|---|---|
-| `Capability.PERSISTENCE` | Postgres, Mongo, MySQL, DynamoDB, Cassandra | Primary data store |
+| `Capability.PERSISTENCE` | Postgres, Mongo, MySQL, DynamoDB, Cassandra, InfluxDB | Primary data store |
 | `Capability.CACHE` | Redis | Fast ephemeral store, sessions, rate limits |
 | `Capability.QUEUE` | Kafka, NATS, RabbitMQ | Message publishing and consumption |
 | `Capability.SEARCH` | Milvus, Qdrant, ChromaDB, FAISS, FalkorDB | Vector similarity search |
 
 The closed `Capability` enum (`openframe.core.ports.Capability`) has no
-dedicated time-series member as of core v3.0 — InfluxDB and other
-time-series adapters do not yet have an assigned capability in this
-taxonomy.
+dedicated time-series member as of core v3.0. InfluxDB registers under
+`Capability.PERSISTENCE` rather than a dedicated member — adding one to a
+closed, ecosystem-wide enum needs its own ADR-level justification, and
+nothing about InfluxDB's registry-lookup behavior requires it. See
+`openframe-adapters-db-influxdb`'s `plugin.py` module docstring and its
+README's "InfluxDB vs. row-based CRUD" section for the real mismatch that
+distinguishes this adapter from the rest of the `PERSISTENCE` group —
+it is not a drop-in row-store replacement despite the shared capability.
 
 `Capability` also compares equal to its string value (e.g.
 `Capability.PERSISTENCE == "persistence"`), so existing string comparisons
@@ -302,8 +308,9 @@ reaches the adapter, so it shouldn't produce a misleading adapter span.
 | `cockroachdb` | `openframe-adapters[cockroachdb]` | `openframe-adapters-db-cockroachdb` | `asyncpg` |
 | `mysql` | `openframe-adapters[mysql]` | `openframe-adapters-db-mysql` | `aiomysql` |
 | `mariadb` | `openframe-adapters[mariadb]` | `openframe-adapters-db-mariadb` | `aiomysql` |
+| `oracle` | `openframe-adapters[oracle]` | `openframe-adapters-db-oracle` | `oracledb` (thin mode async) |
 | `redis` | `openframe-adapters[redis]` | `openframe-adapters-db-redis` | `redis-py` (asyncio) |
-| `dynamodb` | `openframe-adapters[dynamodb]` | `openframe-adapters-db-dynamodb` | `aiobotocore` |
+| `dynamodb` | `openframe-adapters[dynamodb]` | `openframe-adapters-db-dynamodb` | `aioboto3` (aiohttp-backed via aiobotocore) |
 | `mongo` | `openframe-adapters[mongo]` | `openframe-adapters-db-mongo` | `Motor` |
 | `cassandra` | `openframe-adapters[cassandra]` | `openframe-adapters-db-cassandra` | `cassandra-driver` |
 | `influxdb` | `openframe-adapters[influxdb]` | `openframe-adapters-db-influxdb` | `influxdb-client` |
@@ -315,10 +322,10 @@ reaches the adapter, so it shouldn't produce a misleading adapter span.
 | `kafka` | `openframe-adapters[kafka]` | `openframe-adapters-queue-kafka` | `aiokafka` |
 | `nats` | `openframe-adapters[nats]` | `openframe-adapters-queue-nats` | `nats-py` |
 | `rabbitmq` | `openframe-adapters[rabbitmq]` | `openframe-adapters-queue-rabbitmq` | `aio-pika` |
-| `db` | `openframe-adapters[db]` | all 9 DB adapters above | — |
+| `db` | `openframe-adapters[db]` | all 10 DB adapters above | — |
 | `vector` | `openframe-adapters[vector]` | all 5 vector adapters above | — |
 | `queue` | `openframe-adapters[queue]` | all 3 queue adapters above | — |
-| `all` | `openframe-adapters[all]` | all 17 adapter packages | — |
+| `all` | `openframe-adapters[all]` | all 18 adapter packages | — |
 
 ---
 

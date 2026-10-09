@@ -18,7 +18,6 @@ from openframe.core.exceptions import AdapterConnectionError, AdapterQueryError
 from openframe.core.ports import BaseConsumer
 from openframe.core.testing import ConsumerContractTests
 
-from conftest import _make_mock_queue_iterator
 
 
 def _raw_message(payload: dict, headers: dict | None = None) -> MagicMock:
@@ -55,9 +54,10 @@ class TestRabbitmqConsumerContracts(ConsumerContractTests):
         mock_connection: MagicMock,
         mock_channel: MagicMock,
         mock_queue: MagicMock,
+        make_mock_queue_iterator,
     ):
         raw_msg = _raw_message({"content": "test message", "type": "event"})
-        mock_queue.iterator = MagicMock(return_value=_make_mock_queue_iterator([raw_msg]))
+        mock_queue.iterator = MagicMock(return_value=make_mock_queue_iterator([raw_msg]))
         mock_channel.declare_queue = AsyncMock(return_value=mock_queue)
         with _patch_connect(mock_connection):
             yield RabbitmqConsumer(mock_settings)
@@ -116,9 +116,10 @@ class TestSubscribe:
         mock_connection: MagicMock,
         mock_channel: MagicMock,
         mock_queue: MagicMock,
+        make_mock_queue_iterator,
     ) -> None:
         raw_msg = _raw_message({"event": "item.created"})
-        mock_queue.iterator = MagicMock(return_value=_make_mock_queue_iterator([raw_msg]))
+        mock_queue.iterator = MagicMock(return_value=make_mock_queue_iterator([raw_msg]))
         mock_channel.declare_queue = AsyncMock(return_value=mock_queue)
 
         handler = AsyncMock()
@@ -133,9 +134,10 @@ class TestSubscribe:
         mock_connection: MagicMock,
         mock_channel: MagicMock,
         mock_queue: MagicMock,
+        make_mock_queue_iterator,
     ) -> None:
         raw_msg = _raw_message({"event": "ok"})
-        mock_queue.iterator = MagicMock(return_value=_make_mock_queue_iterator([raw_msg]))
+        mock_queue.iterator = MagicMock(return_value=make_mock_queue_iterator([raw_msg]))
         mock_channel.declare_queue = AsyncMock(return_value=mock_queue)
 
         with _patch_connect(mock_connection):
@@ -150,9 +152,10 @@ class TestSubscribe:
         mock_connection: MagicMock,
         mock_channel: MagicMock,
         mock_queue: MagicMock,
+        make_mock_queue_iterator,
     ) -> None:
         raw_msg = _raw_message({"event": "bad"})
-        mock_queue.iterator = MagicMock(return_value=_make_mock_queue_iterator([raw_msg]))
+        mock_queue.iterator = MagicMock(return_value=make_mock_queue_iterator([raw_msg]))
         mock_channel.declare_queue = AsyncMock(return_value=mock_queue)
 
         failing_handler = AsyncMock(side_effect=ValueError("bad message"))

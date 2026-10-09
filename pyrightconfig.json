@@ -2,7 +2,21 @@
   "extraPaths": [
     "packages/openframe-adapters-db-postgres/",
     "packages/openframe-adapters-db-mongo/",
-    "packages/openframe-adapters-db-redis/"
+    "packages/openframe-adapters-db-redis/",
+    "packages/openframe-adapters-queue-kafka/",
+    "packages/openframe-adapters-queue-nats/",
+    "packages/openframe-adapters-queue-rabbitmq/",
+    "packages/openframe-adapters-db-cockroachdb/",
+    "packages/openframe-adapters-db-mysql/",
+    "packages/openframe-adapters-db-mariadb/",
+    "packages/openframe-adapters-db-oracle/",
+    "packages/openframe-adapters-db-dynamodb/",
+    "packages/openframe-adapters-db-cassandra/",
+    "packages/openframe-adapters-db-influxdb/",
+    "packages/openframe-adapters-db-qdrant/",
+    "packages/openframe-adapters-db-milvus/",
+    "packages/openframe-adapters-db-chromadb/",
+    "packages/openframe-adapters-db-falkordb/"
   ],
   "pythonVersion": "3.11"
 }

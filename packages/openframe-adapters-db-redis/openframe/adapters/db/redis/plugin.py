@@ -79,7 +79,7 @@ class RedisPlugin(BasePort):
     """
 
     name:       str = "openframe-redis"
-    version:    str = "2.0.5"
+    version:    str = "2.0.6"
     capability: Capability = Capability.CACHE
 
     def __init__(

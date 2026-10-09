@@ -65,6 +65,24 @@ def mock_queue():
 
 
 @pytest.fixture
+def make_mock_queue_iterator():
+    """
+    Fixture exposing ``_make_mock_queue_iterator`` to test modules.
+
+    Deliberately NOT imported via ``from conftest import ...`` — that
+    pattern only works under pytest's default/prepend import mode (which
+    inserts the test file's directory onto ``sys.path`` as a side
+    effect). It breaks under ``--import-mode=importlib`` (used by this
+    monorepo's root ``pyproject.toml`` for cross-package test runs),
+    where no bare ``conftest`` module is importable. Fixtures are always
+    discoverable regardless of import mode — this is the correct pattern,
+    matching every other fixture in this file and in the Kafka package's
+    own ``conftest.py`` this package was templated from.
+    """
+    return _make_mock_queue_iterator
+
+
+@pytest.fixture
 def mock_settings():
     """A RabbitmqSettings instance with a dummy broker URL."""
     from openframe.adapters.queue.rabbitmq import RabbitmqSettings
